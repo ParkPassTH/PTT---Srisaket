@@ -65,7 +65,7 @@ export class GeminiService implements VoiceAnalyzer {
           }
         }
       }),
-      signal: AbortSignal.timeout(52_000)
+      signal: AbortSignal.timeout(165_000)
     });
     if (!response.ok) throw new Error(`Gemini API returned ${response.status}: ${(await response.text()).slice(0, 300)}`);
     const payload = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };

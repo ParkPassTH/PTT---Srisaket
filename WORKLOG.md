@@ -229,3 +229,12 @@
 - เปลี่ยน Sheets adapter ให้อ่าน header จริงตามชื่อ เพิ่มเฉพาะ canonical columns ที่ขาด และรักษาคอลัมน์/ข้อมูลเดิมโดยไม่ลบหรือเลื่อนข้อมูล
 - เพิ่ม legacy mapping สำหรับ `full_name`, member code ที่อยู่ใน `line_user_id` และ LINE user ID ที่อยู่ใน `plots`
 - typecheck, tests 17/17 และ production build ผ่าน
+
+## 2026-10-18 — Three-minute processing and full change snapshots
+
+- ตั้ง Vercel function duration เป็น 180 วินาที และ Gemini request timeout เป็น 165 วินาที
+- เปลี่ยน LINE flow ให้ตอบรับไฟล์ทันที แล้วใช้ Push API แจ้งผลภายหลัง เพื่อไม่พึ่ง reply token ระหว่างงานยาว
+- เพิ่ม audit snapshot `before`/`after` สำหรับรับเสียง ประมวลผลสำเร็จ ล้มเหลว ยืนยันโดยเกษตรกร และเชื่อมบัญชี LINE
+- เพิ่ม snapshot ฝั่ง Activity เมื่อเชื่อมกับล็อต
+- เพิ่มการตรวจ ownership/status ของแปลงและตรวจพืชจากเสียงเทียบกับทะเบียนแปลง
+- เพิ่ม `docs/ICS_RECORDING_GUIDE.md` เป็น checklist เบื้องต้น โดยรอผู้จัดการ ICS/หน่วยรับรองอนุมัติกฎจริง

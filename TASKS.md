@@ -23,6 +23,7 @@
 - [x] T-007 เลือกทิศทาง UX/UI ตาม Impeccable — สมุดตรวจสหกรณ์
 - [ ] T-008 ยืนยันรายการสาร กฎ และผู้มีอำนาจอนุมัติ
 - [ ] T-009 ยืนยัน privacy/retention policy ของเสียงและข้อมูลเกษตรกร
+- [ ] T-010 ให้ผู้จัดการ ICS/หน่วยรับรองอนุมัติ checklist, controlled input list และ sanction matrix ใน `docs/ICS_RECORDING_GUIDE.md`
 
 ## Phase 1 — Architecture และ Foundation
 
@@ -49,6 +50,7 @@
 - [-] T-208 confirmation and correction conversation — ยืนยันรายการผ่าน LINE พร้อม; รอแก้ไขรายช่อง — F-008
 - [ ] T-209 Flex Message templates + accessible wording — F-009
 - [ ] T-210 retry/outbox/dead-letter workflow — F-024
+- [x] T-211 audit snapshots ของ LINE lifecycle และ account linking — F-022
 
 ## Phase 3 — Dashboard
 

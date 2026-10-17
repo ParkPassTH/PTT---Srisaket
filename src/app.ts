@@ -256,8 +256,10 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
       const now = new Date().toISOString();
       const lot = { lotId:createId("LOT"), activityId:activity.activityId, farmerId:activity.farmerId, farmerName:activity.farmerName, plotName:activity.plotName, crop:activity.crop, quantity:activity.harvestAmount, unit:activity.harvestUnit, harvestDate:activity.occurredAt.slice(0,10), inventoryStatus:"IN_STOCK" as const, traceToken:createTraceToken(), createdAt:now, updatedAt:now };
       await repository.saveLot(lot);
-      await repository.saveActivity({ ...activity, createdLotId:lot.lotId, updatedAt:now });
+      const linkedActivity = { ...activity, createdLotId:lot.lotId, updatedAt:now };
+      await repository.saveActivity(linkedActivity);
       await repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"LOT", entityId:lot.lotId, actorId:request.user!.userId, action:"CREATE_FROM_ACTIVITY", after:lot, occurredAt:now });
+      await repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"ACTIVITY", entityId:activity.activityId, actorId:request.user!.userId, action:"LINK_LOT", before:activity, after:linkedActivity, occurredAt:now });
       response.status(201).json({ lot });
     } catch (error) { next(error); }
   });

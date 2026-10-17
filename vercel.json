@@ -4,7 +4,7 @@
   "functions": {
     "api/index.ts": {
       "includeFiles": "public/**",
-      "maxDuration": 60
+      "maxDuration": 180
     }
   },
   "rewrites": [
