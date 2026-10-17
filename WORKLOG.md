@@ -208,3 +208,15 @@
 - เพิ่ม `dataSource` ใน Dashboard API และแสดงว่าเชื่อม Google Sheets หรือใช้หน่วยความจำชั่วคราว
 - ปรับ empty state ให้แนะนำการส่งเสียงจริงผ่าน LINE และแยกจากกรณีค้นหาไม่พบ
 - เปลี่ยนคำอธิบาย “ข้อมูลตัวอย่าง” เป็น “ข้อมูลจริงที่รับจาก LINE”
+
+## 2026-10-18 — Production dashboard workflows
+
+- เพิ่มทะเบียนเกษตรกรและแปลงจาก Dashboard พร้อม validation, duplicate member-code protection และ audit trail
+- เพิ่ม worksheet `Plots` ที่สร้าง header อัตโนมัติใน Google Sheets
+- เพิ่มหน้าสถานะการเชื่อมต่อที่รายงาน Sheets, LINE, Gemini และ public trace โดยไม่ส่งค่า secret กลับ browser
+- เปิดเมนูกิจกรรม งานตรวจ เกษตรกร/แปลง ล็อต/คลัง รายงาน และการเชื่อมต่อให้ทำงานจริง
+- เพิ่ม lot eligibility, UUID Lot ID, inventory transition, recall/void, QR PNG และ public trace page แบบไม่เปิดเผย PII
+- เพิ่ม CSV export ตามสิทธิ์พร้อม audit event
+- เพิ่มคำสั่ง `ยืนยัน <Activity ID>` ผ่าน LINE และแจ้งขอข้อมูลเพิ่มกลับไปยัง LINE เมื่อมีบัญชีที่ผูกไว้
+- ลบข้อมูลล็อกอินตัวอย่างที่กรอกค้างไว้บนหน้า production
+- automated tests ผ่าน 17 รายการก่อนเพิ่ม QR และอยู่ระหว่าง final verification

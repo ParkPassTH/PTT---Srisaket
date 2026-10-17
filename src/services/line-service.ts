@@ -29,7 +29,7 @@ export class LineService {
     for (const unknownEvent of body.events ?? []) {
       if (!isMessageEvent(unknownEvent)) { ignored++; continue; }
       const event = unknownEvent;
-      if (event.message?.type === "text") { if (await this.handleRegistration(event)) accepted++; else ignored++; continue; }
+      if (event.message?.type === "text") { if (await this.handleTextCommand(event)) accepted++; else ignored++; continue; }
       if (event.message?.type !== "audio") { ignored++; continue; }
       const sourceEventId = event.webhookEventId ?? `line-${event.message.id}-${event.timestamp}`;
       if (await this.repository.findActivityBySourceEvent(sourceEventId)) { duplicates++; continue; }
@@ -58,11 +58,24 @@ export class LineService {
     return { accepted, duplicates, ignored, failed };
   }
 
-  private async handleRegistration(event: LineEvent) {
+  private async handleTextCommand(event: LineEvent) {
+    const text = event.message?.text?.trim() ?? "";
+    const confirmation = text.match(/^ยืนยัน\s+(ACT-[A-Za-z0-9-]+)$/i);
+    if (confirmation && event.source.userId) {
+      const farmer = await this.repository.getFarmerByLineUserId(event.source.userId);
+      const activity = await this.repository.getActivity(confirmation[1]!);
+      if (!farmer || !activity || activity.farmerId !== farmer.farmerId) { await this.reply(event.replyToken, "ไม่พบรายการนี้ในบัญชีของคุณ กรุณาตรวจเลขที่รายการอีกครั้ง"); return true; }
+      if (activity.processingStatus !== "NEEDS_CONFIRMATION") { await this.reply(event.replyToken, "รายการนี้ไม่อยู่ในสถานะรอยืนยัน เจ้าหน้าที่จะเป็นผู้ตรวจสอบต่อ"); return true; }
+      const now = new Date().toISOString();
+      await this.repository.saveActivity({ ...activity, processingStatus:"COMPLETED", updatedAt:now });
+      await this.repository.saveAuditEvent({ auditId:`AUD-LINE-${event.timestamp}`, entityType:"ACTIVITY", entityId:activity.activityId, actorId:farmer.farmerId, action:"FARMER_CONFIRM", occurredAt:now });
+      await this.reply(event.replyToken, `ยืนยันบันทึก ${activity.activityId} เรียบร้อยแล้ว ✅`);
+      return true;
+    }
     const match = event.message?.text?.trim().match(/^ลงทะเบียน\s+([A-Za-z0-9_-]+)$/i);
     if (!match || !event.source.userId) return false;
     const farmer = await this.repository.getFarmerByMemberCode(match[1]!);
-    if (!farmer) { await this.reply(event.replyToken, "ไม่พบรหัสสมาชิกนี้ กรุณาติดต่อเจ้าหน้าที่ให้เพิ่มข้อมูลในชีต Farmers"); return true; }
+    if (!farmer) { await this.reply(event.replyToken, "ไม่พบรหัสสมาชิกนี้ กรุณาติดต่อเจ้าหน้าที่ให้เพิ่มสมาชิกในหน้าเว็บทะเบียน ICS"); return true; }
     await this.repository.saveFarmer({ ...farmer, lineUserId: event.source.userId });
     await this.reply(event.replyToken, `เชื่อมบัญชีสำเร็จ: ${farmer.displayName}\nส่งข้อความเสียงกิจกรรมการเกษตรได้เลย`);
     return true;
@@ -83,5 +96,11 @@ export class LineService {
     if (!response.ok) throw new Error(`LINE reply API returned ${response.status}: ${(await response.text()).slice(0, 200)}`);
   }
 
-  private summary(id: string, transcript: string, risk: string) { const status = risk === "FLAGGED_HIGH" ? "พบประเด็นเสี่ยง รอเจ้าหน้าที่ตรวจ" : risk === "NEEDS_REVIEW" ? "ข้อมูลยังไม่ครบ รอเจ้าหน้าที่ตรวจ" : "บันทึกแล้ว รอยืนยัน"; return `รับและถอดเสียงสำเร็จ ✅\nเลขที่: ${id}\nข้อความ: ${transcript.slice(0, 700)}\nสถานะ: ${status}`; }
+  private summary(id: string, transcript: string, risk: string) { const status = risk === "FLAGGED_HIGH" ? "พบประเด็นเสี่ยง รอเจ้าหน้าที่ตรวจ" : risk === "NEEDS_REVIEW" ? "ข้อมูลยังไม่ครบ รอเจ้าหน้าที่ตรวจ" : `บันทึกแล้ว รอยืนยัน\nหากข้อมูลถูกต้อง ส่ง: ยืนยัน ${id}`; return `รับและถอดเสียงสำเร็จ ✅\nเลขที่: ${id}\nข้อความ: ${transcript.slice(0, 700)}\nสถานะ: ${status}`; }
+}
+
+export async function pushLineText(config: AppConfig, lineUserId: string, text: string) {
+  if (!config.LINE_CHANNEL_ACCESS_TOKEN) throw new Error("LINE_CHANNEL_ACCESS_TOKEN is not configured");
+  const response = await fetch("https://api.line.me/v2/bot/message/push", { method:"POST", headers:{ Authorization:`Bearer ${config.LINE_CHANNEL_ACCESS_TOKEN}`, "Content-Type":"application/json" }, body:JSON.stringify({ to:lineUserId, messages:[{ type:"text", text:text.slice(0,5000) }] }), signal:AbortSignal.timeout(10_000) });
+  if (!response.ok) throw new Error(`LINE push API returned ${response.status}: ${(await response.text()).slice(0,200)}`);
 }

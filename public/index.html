@@ -26,16 +26,16 @@
       </div>
       <form id="login-form" class="login-form" novalidate>
         <label for="email">อีเมล</label>
-        <input id="email" name="email" type="email" autocomplete="username" value="admin@example.com" required>
+        <input id="email" name="email" type="email" autocomplete="username" required>
         <label for="password">รหัสผ่าน</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" value="change-this-before-deploy" minlength="8" required>
+        <input id="password" name="password" type="password" autocomplete="current-password" minlength="8" required>
         <p id="login-error" class="form-error" role="alert" hidden></p>
         <button class="button button-primary" type="submit">
           <span>เข้าสู่ระบบ</span>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6M4 12h11"/></svg>
         </button>
       </form>
-      <p class="demo-note">บัญชีในหน้าจอนี้เป็นข้อมูลทดสอบสำหรับการพัฒนา กรุณาเปลี่ยนก่อน deploy</p>
+      <p class="demo-note">ใช้บัญชีผู้ดูแลที่ตั้งไว้ในระบบ หากลืมรหัสผ่านให้ติดต่อผู้ดูแล deployment</p>
     </section>
     <aside class="login-context" aria-label="หลักการของระบบ">
       <blockquote>“AI ช่วยจัดโครงสร้าง<br>มนุษย์เป็นผู้รับรอง”</blockquote>
@@ -86,6 +86,10 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
           รายงาน
         </button>
+        <button class="nav-item" data-view="integrations">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+          การเชื่อมต่อ
+        </button>
       </nav>
       <div class="sidebar-foot">
         <div class="system-health"><span class="health-dot"></span><div><strong id="system-status">กำลังตรวจระบบ</strong><small id="system-source">กำลังตรวจแหล่งข้อมูล...</small></div></div>
@@ -99,7 +103,7 @@
     <main id="main-content" class="workspace" tabindex="-1">
       <header class="workspace-head">
         <div>
-          <h1>งานที่ต้องดูแลวันนี้</h1>
+          <h1 id="page-title">งานที่ต้องดูแลวันนี้</h1>
           <p id="current-date">กำลังโหลดข้อมูลล่าสุด...</p>
         </div>
         <div class="head-actions">
@@ -164,6 +168,29 @@
           <div id="empty-state" class="empty-state" hidden><strong id="empty-title">ยังไม่มีกิจกรรมจริง</strong><p id="empty-description">เชื่อมบัญชีเกษตรกรใน LINE แล้วส่งข้อความเสียง รายการแรกจะปรากฏที่นี่</p></div>
         </section>
       </div>
+
+      <div id="farmers-content" class="page-content" hidden>
+        <section class="page-intro"><div><p class="eyebrow">ทะเบียนสมาชิก</p><h2>เกษตรกรและแปลง</h2><p>เพิ่มสมาชิกจากหน้านี้ แล้วให้เกษตรกรส่ง <strong>ลงทะเบียน รหัสสมาชิก</strong> ใน LINE</p></div><button id="add-farmer-button" class="button button-primary">เพิ่มเกษตรกร</button></section>
+        <section class="registry-panel"><header class="panel-head table-head"><div><h2>สมาชิกทั้งหมด</h2><p id="farmer-count">กำลังโหลด...</p></div><label class="search-field"><span class="visually-hidden">ค้นหาสมาชิก</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input id="farmer-search" type="search" placeholder="ค้นหารหัสหรือชื่อ"></label></header><div id="farmer-list" class="farmer-list"></div></section>
+      </div>
+
+      <div id="integrations-content" class="page-content" hidden>
+        <section class="page-intro"><div><p class="eyebrow">ตรวจความพร้อม</p><h2>สถานะการเชื่อมต่อ</h2><p>แสดงเฉพาะสถานะ ไม่เปิดเผย API key หรือข้อมูลลับ</p></div><button id="refresh-integrations" class="button secondary-button">ตรวจใหม่</button></section>
+        <section id="integration-grid" class="integration-grid" aria-live="polite"></section>
+        <section class="guide-panel"><h3>ลำดับทดสอบเสียง</h3><ol><li>สถานะ Google Sheets, LINE และ AI ต้องขึ้น “พร้อม”</li><li>เพิ่มเกษตรกรและแปลงในเมนู “เกษตรกรและแปลง”</li><li>ใน LINE ส่ง <code>ลงทะเบียน M001</code> โดยเปลี่ยนเป็นรหัสจริง</li><li>เมื่อระบบตอบว่าเชื่อมบัญชีสำเร็จ ให้ส่งข้อความเสียงกิจกรรม</li><li>กลับมาดูรายการที่หน้า “ภาพรวม”</li></ol></section>
+      </div>
+
+      <div id="lots-content" class="page-content" hidden>
+        <section class="page-intro"><div><p class="eyebrow">ตรวจสอบย้อนกลับ</p><h2>ล็อตและคลัง</h2><p>สร้างล็อตได้จากกิจกรรมเก็บเกี่ยวที่อนุมัติและมีข้อมูลครบ</p></div></section>
+        <section class="registry-panel"><header class="panel-head"><div><h2>ล็อตทั้งหมด</h2><p id="lot-count">กำลังโหลด...</p></div></header><div id="lot-list" class="lot-list"></div></section>
+        <section class="registry-panel"><header class="panel-head"><div><h2>พร้อมสร้างล็อต</h2><p>กิจกรรมที่อนุมัติแล้วและยังไม่เคยสร้างล็อต</p></div></header><div id="harvest-list" class="farmer-list"></div></section>
+      </div>
+
+      <div id="reports-content" class="page-content" hidden>
+        <section class="page-intro"><div><p class="eyebrow">หลักฐานและการส่งต่อ</p><h2>รายงาน</h2><p>สรุปจากข้อมูลจริงในระบบตามสิทธิ์ผู้ใช้งาน</p></div><a class="button button-primary download-link" href="/api/reports/activities.csv">ดาวน์โหลดกิจกรรม CSV</a></section>
+        <section id="report-grid" class="metrics" aria-label="สรุปรายงาน"></section>
+        <section class="guide-panel"><h3>ข้อมูลในรายงาน</h3><p>ไฟล์ CSV ประกอบด้วยรหัสกิจกรรม เวลา เกษตรกร แปลง พืช ประเภทกิจกรรม ความเสี่ยง และสถานะประมวลผล เปิดด้วย Google Sheets หรือ Excel ได้</p></section>
+      </div>
     </main>
 
     <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
@@ -179,6 +206,9 @@
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="entity-dialog" class="entity-dialog" aria-labelledby="entity-dialog-title">
+    <form id="entity-form" method="dialog"><header><div><p class="eyebrow">ทะเบียนข้อมูลจริง</p><h2 id="entity-dialog-title">เพิ่มข้อมูล</h2></div><button type="button" id="entity-dialog-close" class="icon-button" aria-label="ปิด"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header><div id="entity-form-fields" class="form-fields"></div><p id="entity-form-error" class="form-error" role="alert" hidden></p><footer><button type="button" id="entity-cancel" class="button secondary-button">ยกเลิก</button><button type="submit" class="button button-primary">บันทึก</button></footer></form>
+  </dialog>
   <script type="module" src="/app.js"></script>
 </body>
 </html>

@@ -1,10 +1,11 @@
 import { google, sheets_v4 } from "googleapis";
 import type { AppConfig } from "../config.js";
-import type { Activity, AuditEvent, Farmer, Lot, Review } from "../domain/types.js";
+import type { Activity, AuditEvent, Farmer, Lot, Plot, Review } from "../domain/types.js";
 import type { ActivityFilters, Repository } from "./repository.js";
 
 const TABLES = {
   Farmers: ["farmer_id", "member_code", "display_name", "line_user_id", "status"],
+  Plots: ["plot_id", "farmer_id", "name", "crop", "status"],
   Activities: ["activity_id", "source_event_id", "farmer_id", "farmer_name", "plot_id", "plot_name", "crop", "occurred_at", "received_at", "transcript", "audio_content_id", "activity_type", "inputs_used", "harvest_amount", "harvest_unit", "processing_status", "risk_status", "confidence", "flag_reasons", "matched_terms", "created_lot_id", "updated_at"],
   Reviews: ["review_id", "activity_id", "reviewer_id", "decision", "reason", "reviewed_at"],
   Lots: ["lot_id", "activity_id", "farmer_id", "farmer_name", "plot_name", "crop", "quantity", "unit", "harvest_date", "inventory_status", "trace_token", "created_at", "updated_at"],
@@ -103,7 +104,12 @@ export class GoogleSheetsRepository implements Repository {
   async saveLot(x: Lot) { await this.upsert("Lots", "lot_id", x.lotId, mapKeys(x)); }
   async getFarmerByLineUserId(id: string) { return (await this.rows("Farmers")).map(farmerFromRow).find((x) => x.lineUserId === id && x.status === "ACTIVE"); }
   async getFarmerByMemberCode(code: string) { return (await this.rows("Farmers")).map(farmerFromRow).find((x) => x.memberCode.toLowerCase() === code.toLowerCase() && x.status === "ACTIVE"); }
+  async listFarmers() { return (await this.rows("Farmers")).map(farmerFromRow).sort((a, b) => a.memberCode.localeCompare(b.memberCode)); }
+  async getFarmer(id: string) { return (await this.rows("Farmers")).map(farmerFromRow).find((x) => x.farmerId === id); }
   async saveFarmer(x: Farmer) { await this.upsert("Farmers", "farmer_id", x.farmerId, mapKeys(x)); }
+  async listPlots(farmerId?: string) { return (await this.rows("Plots")).map(plotFromRow).filter((x) => !farmerId || x.farmerId === farmerId); }
+  async getPlot(id: string) { return (await this.rows("Plots")).map(plotFromRow).find((x) => x.plotId === id); }
+  async savePlot(x: Plot) { await this.upsert("Plots", "plot_id", x.plotId, mapKeys(x)); }
   async saveAuditEvent(x: AuditEvent) { await this.append("AuditEvents", mapKeys(x)); }
   async listAuditEvents(id: string) { return (await this.rows("AuditEvents")).map(auditFromRow).filter((x) => x.entityId === id); }
 }
@@ -111,6 +117,7 @@ export class GoogleSheetsRepository implements Repository {
 function columnName(count: number) { let value = count; let result = ""; while (value) { value--; result = String.fromCharCode(65 + value % 26) + result; value = Math.floor(value / 26); } return result; }
 function mapKeys(value: object): Row { return Object.fromEntries(Object.entries(value).map(([key, item]) => [key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`), enc(item)])); }
 function farmerFromRow(r: Row): Farmer { return { farmerId: r.farmer_id!, memberCode: r.member_code!, displayName: r.display_name!, ...(r.line_user_id ? { lineUserId: r.line_user_id } : {}), status: r.status === "INACTIVE" ? "INACTIVE" : "ACTIVE" }; }
+function plotFromRow(r: Row): Plot { return { plotId: r.plot_id!, farmerId: r.farmer_id!, name: r.name!, crop: r.crop!, status: r.status === "INACTIVE" ? "INACTIVE" : "ACTIVE" }; }
 function activityFromRow(r: Row): Activity { return { activityId:r.activity_id!,sourceEventId:r.source_event_id!,farmerId:r.farmer_id!,farmerName:r.farmer_name!,...(r.plot_id?{plotId:r.plot_id}:{}),...(r.plot_name?{plotName:r.plot_name}:{}),...(r.crop?{crop:r.crop}:{}),occurredAt:r.occurred_at!,receivedAt:r.received_at!,...(r.transcript?{transcript:r.transcript}:{}),...(r.audio_content_id?{audioContentId:r.audio_content_id}:{}),...(r.activity_type?{activityType:r.activity_type}:{}),...(r.inputs_used?{inputsUsed:r.inputs_used}:{}),...(num(r.harvest_amount!)!==undefined?{harvestAmount:num(r.harvest_amount!)!}:{}),...(r.harvest_unit?{harvestUnit:r.harvest_unit}:{}),processingStatus:r.processing_status as Activity["processingStatus"],riskStatus:r.risk_status as Activity["riskStatus"],confidence:Number(r.confidence||0),flagReasons:json(r.flag_reasons!,[]),matchedTerms:json(r.matched_terms!,[]),...(r.created_lot_id?{createdLotId:r.created_lot_id}:{}),updatedAt:r.updated_at! }; }
 function activityToRow(x: Activity) { return mapKeys(x); }
 function reviewFromRow(r: Row): Review { return { reviewId:r.review_id!,activityId:r.activity_id!,reviewerId:r.reviewer_id!,decision:r.decision as Review["decision"],reason:r.reason!,reviewedAt:r.reviewed_at! }; }

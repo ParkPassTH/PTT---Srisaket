@@ -1,13 +1,8 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { Request, Response, NextFunction } from "express";
 import type { AppConfig } from "../config.js";
 import type { SessionUser, UserRole } from "../domain/types.js";
 import { HttpError } from "../lib/http-error.js";
-
-interface SessionRecord {
-  user: SessionUser;
-  expiresAt: number;
-}
 
 const COOKIE_NAME = "ics_session";
 const SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
@@ -31,9 +26,11 @@ function parseCookies(header?: string) {
 }
 
 export class AuthService {
-  private sessions = new Map<string, SessionRecord>();
-
   constructor(private readonly config: AppConfig) {}
+
+  private sign(payload: string) {
+    return createHmac("sha256", this.config.SESSION_SECRET).update(payload).digest("base64url");
+  }
 
   login(email: string, password: string) {
     if (!constantTimeEqual(email.toLowerCase(), this.config.ADMIN_EMAIL.toLowerCase()) ||
@@ -41,14 +38,14 @@ export class AuthService {
       throw new HttpError(401, "INVALID_CREDENTIALS", "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
     }
 
-    const token = randomBytes(32).toString("base64url");
     const user: SessionUser = {
       userId: "admin-local",
       email: this.config.ADMIN_EMAIL,
       displayName: "ผู้ดูแลระบบ",
       roles: ["ADMIN", "REVIEWER", "WAREHOUSE", "AUDITOR"]
     };
-    this.sessions.set(token, { user, expiresAt: Date.now() + SESSION_DURATION_MS });
+    const payload = Buffer.from(JSON.stringify({ user, expiresAt:Date.now() + SESSION_DURATION_MS })).toString("base64url");
+    const token = `${payload}.${this.sign(payload)}`;
     return { token, user };
   }
 
@@ -69,12 +66,13 @@ export class AuthService {
   resolveUser(request: Request) {
     const token = parseCookies(request.headers.cookie).get(COOKIE_NAME);
     if (!token) return undefined;
-    const session = this.sessions.get(token);
-    if (!session || session.expiresAt <= Date.now()) {
-      if (session) this.sessions.delete(token);
-      return undefined;
-    }
-    return session.user;
+    const [payload, signature] = token.split(".");
+    if (!payload || !signature || !constantTimeEqual(signature, this.sign(payload))) return undefined;
+    try {
+      const session = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { user:SessionUser; expiresAt:number };
+      if (session.expiresAt <= Date.now()) return undefined;
+      return session.user;
+    } catch { return undefined; }
   }
 
   requireUser = (request: Request, _response: Response, next: NextFunction) => {

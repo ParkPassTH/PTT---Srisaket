@@ -1,4 +1,4 @@
-const state = { user: null, dashboard: null, activities: [], selectedActivity: null, drawerInvoker: null };
+const state = { user: null, dashboard: null, activities: [], farmers: [], plots: [], lots: [], selectedActivity: null, drawerInvoker: null, currentView: "overview", formMode: null };
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -125,6 +125,101 @@ function renderDashboard() {
   renderActivityTable(activities);
 }
 
+async function showView(view) {
+  const supported = ["overview", "reviews", "activities", "lots", "farmers", "reports", "integrations"];
+  if (!supported.includes(view)) {
+    showToast(view === "lots" ? "ล็อตและคลังอยู่ในเฟสถัดไป" : "รายงานและไฟล์ส่งออกอยู่ในเฟสถัดไป");
+    return;
+  }
+  state.currentView = view;
+  $$(".nav-item[data-view]").forEach((item) => item.classList.toggle("active", item.dataset.view === view));
+  $("#dashboard-content").hidden = !["overview", "reviews", "activities"].includes(view);
+  $("#farmers-content").hidden = view !== "farmers";
+  $("#integrations-content").hidden = view !== "integrations";
+  $("#lots-content").hidden = view !== "lots";
+  $("#reports-content").hidden = view !== "reports";
+  $("#sidebar").classList.remove("open");
+  const titles = { overview:"งานที่ต้องดูแลวันนี้", reviews:"งานที่รอตรวจสอบ", activities:"ทะเบียนกิจกรรมแปลง", lots:"ล็อตและคลัง", farmers:"ทะเบียนเกษตรกรและแปลง", reports:"รายงาน", integrations:"สถานะการเชื่อมต่อ" };
+  $("#page-title").textContent = titles[view];
+  if (view === "farmers") await loadFarmers();
+  if (view === "integrations") await loadIntegrations();
+  if (view === "lots") await loadLots();
+  if (view === "reports") renderReports();
+  if (view === "reviews") document.querySelector(".review-panel")?.scrollIntoView({ behavior:"smooth", block:"start" });
+  if (view === "activities") document.querySelector(".registry-panel")?.scrollIntoView({ behavior:"smooth", block:"start" });
+}
+
+async function loadLots() {
+  try {
+    const [{ lots }, { activities }] = await Promise.all([api("/api/lots"), api("/api/activities")]);
+    state.lots = lots;
+    state.activities = activities;
+    renderLots();
+  } catch (error) { showToast(error.message); }
+}
+
+function renderLots() {
+  const statusLabel = { DRAFT:"ฉบับร่าง", IN_STOCK:"ในคลัง", RESERVED:"จองแล้ว", SHIPPED:"ส่งแล้ว", VOID:"ยกเลิก", RECALLED:"เรียกคืน" };
+  $("#lot-count").textContent = `${state.lots.length} ล็อต`;
+  $("#lot-list").innerHTML = state.lots.map((lot) => `<article class="lot-card"><div><span class="member-code">${escapeHtml(lot.lotId)}</span><h3>${escapeHtml(lot.crop)}</h3><p>${escapeHtml(lot.farmerName)} · ${escapeHtml(lot.plotName)} · ${escapeHtml(lot.quantity)} ${escapeHtml(lot.unit)}</p><small>เก็บเกี่ยว ${new Intl.DateTimeFormat("th-TH", { dateStyle:"medium" }).format(new Date(lot.harvestDate))}</small></div><div class="lot-actions"><span class="status ${["VOID","RECALLED"].includes(lot.inventoryStatus) ? "status-critical" : "status-clear"}">${statusLabel[lot.inventoryStatus]}</span><a class="text-button" href="/trace/${encodeURIComponent(lot.traceToken)}" target="_blank" rel="noopener">เปิดหน้าตรวจสอบ</a><a class="text-button" href="/api/lots/${encodeURIComponent(lot.lotId)}/qr.png">ดาวน์โหลด QR</a>${["VOID","RECALLED"].includes(lot.inventoryStatus) ? "" : `<select data-lot-status="${escapeHtml(lot.lotId)}" aria-label="เปลี่ยนสถานะ ${escapeHtml(lot.lotId)}"><option value="">เปลี่ยนสถานะ...</option>${lot.inventoryStatus !== "SHIPPED" ? '<option value="SHIPPED">ส่งสินค้าแล้ว</option>' : ""}<option value="RECALLED">เรียกคืน</option><option value="VOID">ยกเลิก</option></select>`}</div></article>`).join("") || `<div class="empty-state"><strong>ยังไม่มีล็อต</strong><p>ล็อตแรกสร้างได้จากรายการเก็บเกี่ยวที่อนุมัติและมีข้อมูลครบ</p></div>`;
+  const harvests = state.activities.filter((x) => x.riskStatus === "APPROVED" && x.harvestAmount && x.harvestUnit && x.crop && x.plotName && !x.createdLotId);
+  $("#harvest-list").innerHTML = harvests.map((item) => `<article class="farmer-card"><div class="farmer-main"><span class="farmer-mark">${escapeHtml(initials(item.farmerName))}</span><div><strong>${escapeHtml(item.farmerName)} · ${escapeHtml(item.crop)}</strong><small>${escapeHtml(item.plotName)} · ${escapeHtml(item.harvestAmount)} ${escapeHtml(item.harvestUnit)}</small></div><button class="button secondary-button" data-create-lot="${escapeHtml(item.activityId)}">สร้างล็อต</button></div></article>`).join("") || `<div class="empty-state"><strong>ยังไม่มีกิจกรรมที่พร้อมสร้างล็อต</strong><p>ตรวจและอนุมัติกิจกรรมเก็บเกี่ยวที่มีพืช แปลง ปริมาณ และหน่วยครบก่อน</p></div>`;
+}
+
+function renderReports() {
+  const { summary } = state.dashboard;
+  const farmers = new Set(state.activities.map((x) => x.farmerId)).size;
+  $("#report-grid").innerHTML = `<article class="metric"><span>กิจกรรมทั้งหมด</span><strong>${state.activities.length}</strong><small>รายการที่โหลดในทะเบียน</small></article><article class="metric"><span>เกษตรกรที่มีรายการ</span><strong>${farmers}</strong><small>นับจากกิจกรรม</small></article><article class="metric"><span>รอตรวจสอบ</span><strong>${summary.pendingReview}</strong><small>ต้องดำเนินการ</small></article><article class="metric"><span>ล็อตในคลัง</span><strong>${summary.lotsInStock}</strong><small>พร้อมส่งต่อ</small></article>`;
+}
+
+async function loadFarmers() {
+  try {
+    const data = await api("/api/farmers");
+    state.farmers = data.farmers;
+    state.plots = data.plots;
+    renderFarmers();
+  } catch (error) { showToast(error.message); }
+}
+
+function renderFarmers() {
+  const query = $("#farmer-search").value.trim().toLocaleLowerCase("th-TH");
+  const farmers = state.farmers.filter((item) => !query || `${item.memberCode} ${item.displayName}`.toLocaleLowerCase("th-TH").includes(query));
+  $("#farmer-count").textContent = `${state.farmers.length} สมาชิก · ${state.plots.length} แปลง`;
+  $("#farmer-list").innerHTML = farmers.map((farmer) => {
+    const plots = state.plots.filter((plot) => plot.farmerId === farmer.farmerId);
+    return `<article class="farmer-card"><div class="farmer-main"><span class="farmer-mark">${escapeHtml(initials(farmer.displayName))}</span><div><div class="farmer-title"><strong>${escapeHtml(farmer.displayName)}</strong><span class="member-code">${escapeHtml(farmer.memberCode)}</span></div><small>${farmer.lineUserId ? "เชื่อม LINE แล้ว" : "ยังไม่เชื่อม LINE"} · ${farmer.status === "ACTIVE" ? "ใช้งาน" : "พักใช้งาน"}</small></div><button class="text-button" data-add-plot="${escapeHtml(farmer.farmerId)}">+ เพิ่มแปลง</button></div><div class="plot-list">${plots.map((plot) => `<div class="plot-row"><span><strong>${escapeHtml(plot.name)}</strong><small>${escapeHtml(plot.crop)}</small></span><span class="status ${plot.status === "ACTIVE" ? "status-clear" : "status-info"}">${plot.status === "ACTIVE" ? "ใช้งาน" : "พักใช้งาน"}</span></div>`).join("") || `<p class="muted">ยังไม่มีแปลง กด “เพิ่มแปลง” เพื่อให้ AI จับคู่กิจกรรมได้แม่นขึ้น</p>`}</div></article>`;
+  }).join("") || `<div class="empty-state"><strong>ยังไม่มีสมาชิก</strong><p>เพิ่มเกษตรกรคนแรกจากปุ่มด้านบน โดยไม่ต้องเปิด Google Sheet</p></div>`;
+}
+
+async function loadIntegrations() {
+  const grid = $("#integration-grid");
+  grid.innerHTML = `<div class="loading-state"><span class="spinner"></span> กำลังตรวจการตั้งค่า...</div>`;
+  try {
+    const status = await api("/api/integrations/status");
+    const items = [
+      ["ฐานข้อมูล", status.dataStore.configured, status.dataStore.configured ? "Google Sheets" : "Memory ชั่วคราว", "ตั้ง DATA_DRIVER=google-sheets และข้อมูลบัญชีบริการ"],
+      ["LINE Messaging API", status.line.configured, status.line.configured ? "Webhook พร้อมรับข้อความ" : "ยังขาด Channel secret หรือ access token", "ตั้ง LINE_CHANNEL_SECRET และ LINE_CHANNEL_ACCESS_TOKEN"],
+      ["ระบบ AI", status.ai.configured, status.ai.configured ? `${status.ai.provider} · ${status.ai.model}` : `ยังไม่มีคีย์สำหรับ ${status.ai.provider}`, "ตั้ง AI_PROVIDER=gemini และ GEMINI_API_KEY"],
+      ["หน้าตรวจสอบล็อต", status.publicTrace.configured, status.publicTrace.configured ? "เปิดใช้งาน" : "ปิดใช้งาน", "ตั้ง PUBLIC_TRACE_ENABLED=true"]
+    ];
+    grid.innerHTML = items.map(([name, ready, detail, action]) => `<article class="integration-card ${ready ? "ready" : "attention"}"><div class="integration-head"><h3>${escapeHtml(name)}</h3><span class="status ${ready ? "status-clear" : "status-review"}">${ready ? "พร้อม" : "ต้องตั้งค่า"}</span></div><strong>${escapeHtml(detail)}</strong><p>${ready ? "ระบบพบค่าที่จำเป็นแล้ว" : escapeHtml(action)}</p></article>`).join("");
+  } catch (error) { grid.innerHTML = `<div class="empty-state"><strong>ตรวจสถานะไม่ได้</strong><p>${escapeHtml(error.message)}</p></div>`; }
+}
+
+function openEntityDialog(mode, farmerId, extra = {}) {
+  state.formMode = { mode, farmerId, ...extra };
+  const isFarmer = mode === "farmer";
+  const isLotStatus = mode === "lot-status";
+  $("#entity-dialog-title").textContent = isFarmer ? "เพิ่มเกษตรกร" : isLotStatus ? "ยืนยันการเปลี่ยนสถานะล็อต" : "เพิ่มแปลง";
+  $("#entity-form-error").hidden = true;
+  $("#entity-form-fields").innerHTML = isFarmer
+    ? `<label>รหัสสมาชิก<input name="memberCode" required minlength="2" maxlength="30" placeholder="เช่น M001" pattern="[A-Za-z0-9_-]+"><small>ใช้รหัสนี้สำหรับคำสั่งลงทะเบียนใน LINE</small></label><label>ชื่อเกษตรกร<input name="displayName" required minlength="2" maxlength="120" placeholder="ชื่อและนามสกุล"></label>`
+    : isLotStatus ? `<p>เปลี่ยนสถานะล็อตเป็น <strong>${escapeHtml(extra.statusLabel || extra.status)}</strong></p><label>เหตุผล<textarea name="reason" required minlength="5" maxlength="500" placeholder="ระบุเหตุผลอย่างน้อย 5 ตัวอักษร"></textarea></label>`
+    : `<label>ชื่อแปลง<input name="name" required maxlength="120" placeholder="เช่น แปลงเหนือ"></label><label>พืชหลัก<input name="crop" required maxlength="120" placeholder="เช่น หอมแดง"></label>`;
+  $("#entity-dialog").showModal();
+  $("#entity-form-fields input").focus();
+}
+
 function renderActivityTable(activities) {
   const table = $("#activity-table");
   const empty = $("#empty-state");
@@ -233,8 +328,46 @@ document.addEventListener("keydown", (event) => {
 document.addEventListener("click", (event) => { const trigger = event.target.closest("[data-activity-id]"); if (trigger) openActivity(trigger.dataset.activityId); });
 document.addEventListener("click", (event) => {
   const viewTrigger = event.target.closest("[data-view]");
-  if (!viewTrigger || viewTrigger.dataset.view === "overview") return;
-  showToast("ส่วนนี้กำลังพัฒนา โดย Dashboard ภาพรวมและงานตรวจสอบพร้อมทดสอบแล้ว");
+  if (viewTrigger) showView(viewTrigger.dataset.view);
+  const plotTrigger = event.target.closest("[data-add-plot]");
+  if (plotTrigger) openEntityDialog("plot", plotTrigger.dataset.addPlot);
+  const lotTrigger = event.target.closest("[data-create-lot]");
+  if (lotTrigger) createLot(lotTrigger.dataset.createLot, lotTrigger);
+});
+async function createLot(activityId, button) {
+  button.disabled = true;
+  try { await api("/api/lots", { method:"POST", body:JSON.stringify({ activityId }) }); showToast("สร้างล็อตและรหัสตรวจสอบแล้ว"); await loadLots(); }
+  catch (error) { showToast(error.message); }
+  finally { button.disabled = false; }
+}
+$("#lot-list").addEventListener("change", async (event) => {
+  const select = event.target.closest("[data-lot-status]");
+  if (!select || !select.value) return;
+  openEntityDialog("lot-status", undefined, { lotId:select.dataset.lotStatus, status:select.value, statusLabel:select.selectedOptions[0].textContent });
+  select.value = "";
+});
+$("#add-farmer-button").addEventListener("click", () => openEntityDialog("farmer"));
+$("#farmer-search").addEventListener("input", renderFarmers);
+$("#refresh-integrations").addEventListener("click", loadIntegrations);
+$("#entity-dialog-close").addEventListener("click", () => $("#entity-dialog").close());
+$("#entity-cancel").addEventListener("click", () => $("#entity-dialog").close());
+$("#entity-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const errorElement = $("#entity-form-error");
+  const submitButton = $("button[type=submit]", event.currentTarget);
+  errorElement.hidden = true;
+  submitButton.disabled = true;
+  try {
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    const isFarmer = state.formMode.mode === "farmer";
+    const isLotStatus = state.formMode.mode === "lot-status";
+    const body = isFarmer ? values : isLotStatus ? { reason:values.reason, status:state.formMode.status } : { ...values, farmerId: state.formMode.farmerId };
+    await api(isFarmer ? "/api/farmers" : isLotStatus ? `/api/lots/${encodeURIComponent(state.formMode.lotId)}/status` : "/api/plots", { method:isLotStatus ? "PATCH" : "POST", body:JSON.stringify(body) });
+    $("#entity-dialog").close();
+    showToast(isFarmer ? "เพิ่มเกษตรกรแล้ว" : isLotStatus ? "อัปเดตสถานะล็อตแล้ว" : "เพิ่มแปลงแล้ว");
+    if (isLotStatus) await loadLots(); else await loadFarmers();
+  } catch (error) { errorElement.textContent = error.message; errorElement.hidden = false; }
+  finally { submitButton.disabled = false; }
 });
 $("#activity-search").addEventListener("input", () => { clearTimeout(filterActivities.timer); filterActivities.timer = setTimeout(filterActivities, 250); });
 $("#risk-filter").addEventListener("change", filterActivities);
@@ -251,4 +384,18 @@ $("#review-drawer").addEventListener("submit", async (event) => {
   } catch (error) { showToast(error.message); }
 });
 
-bootstrap();
+async function showPublicTrace() {
+  const token = decodeURIComponent(location.pathname.split("/").filter(Boolean)[1] || "");
+  document.body.innerHTML = `<main class="public-trace"><section class="trace-sheet"><div class="seal" aria-hidden="true"><svg viewBox="0 0 64 64"><path d="M32 7c-10 8-17 16-17 28 0 10 7 18 17 22 10-4 17-12 17-22C49 23 42 15 32 7Z"/><path d="M32 18v28M32 27c-6 0-10-3-13-7M32 36c7 0 11-3 14-8"/></svg></div><p class="eyebrow">ตรวจสอบย้อนกลับ</p><h1>ข้อมูลล็อตสินค้า</h1><div id="public-trace-result" class="loading-state"><span class="spinner"></span> กำลังตรวจรหัส...</div></section></main>`;
+  try {
+    const { lot, notice } = await api(`/api/trace/${encodeURIComponent(token)}`);
+    const labels = { IN_STOCK:"อยู่ในคลัง", RESERVED:"จองแล้ว", SHIPPED:"ส่งออกแล้ว", VOID:"ยกเลิก", RECALLED:"เรียกคืน", DRAFT:"ฉบับร่าง" };
+    $("#public-trace-result").className = "";
+    $("#public-trace-result").innerHTML = `<span class="status ${["VOID","RECALLED"].includes(lot.inventoryStatus) ? "status-critical" : "status-clear"}">${escapeHtml(labels[lot.inventoryStatus] || lot.inventoryStatus)}</span><dl class="trace-facts"><dt>รหัสล็อต</dt><dd>${escapeHtml(lot.lotId)}</dd><dt>ผลผลิต</dt><dd>${escapeHtml(lot.crop)}</dd><dt>ปริมาณ</dt><dd>${escapeHtml(lot.quantity)} ${escapeHtml(lot.unit)}</dd><dt>วันที่เก็บเกี่ยว</dt><dd>${new Intl.DateTimeFormat("th-TH", { dateStyle:"long" }).format(new Date(lot.harvestDate))}</dd><dt>ชุมชน</dt><dd>${escapeHtml(lot.community)}</dd></dl><p class="trace-notice">${escapeHtml(notice)}</p>`;
+  } catch (error) {
+    $("#public-trace-result").className = "empty-state";
+    $("#public-trace-result").innerHTML = `<strong>ตรวจสอบรหัสไม่ได้</strong><p>${escapeHtml(error.message)}</p>`;
+  }
+}
+
+if (location.pathname.startsWith("/trace/")) showPublicTrace(); else bootstrap();

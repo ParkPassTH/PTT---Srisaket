@@ -4,19 +4,34 @@ import { join } from "node:path";
 import helmetModule, { type HelmetOptions } from "helmet";
 import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
+import QRCode from "qrcode";
 import type { AppConfig } from "./config.js";
 import type { Repository } from "./repositories/repository.js";
 import { AuthService } from "./services/auth-service.js";
-import { LineService } from "./services/line-service.js";
+import { LineService, pushLineText } from "./services/line-service.js";
 import { createVoiceAnalyzer } from "./services/gemini-service.js";
 import { ReviewService } from "./services/review-service.js";
 import { HttpError } from "./lib/http-error.js";
+import { createId, createTraceToken } from "./lib/ids.js";
 
 const loginSchema = z.object({ email: z.string().email(), password: z.string().min(8) });
 const reviewSchema = z.object({
   decision: z.enum(["APPROVE", "FLAG", "REQUEST_INFO", "VOID"]),
   reason: z.string().trim().min(5).max(500)
 });
+const farmerSchema = z.object({
+  memberCode: z.string().trim().min(2).max(30).regex(/^[A-Za-z0-9_-]+$/, "รหัสสมาชิกใช้ได้เฉพาะตัวอักษร ตัวเลข _ และ -"),
+  displayName: z.string().trim().min(2).max(120),
+  status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE")
+});
+const plotSchema = z.object({
+  farmerId: z.string().trim().min(1),
+  name: z.string().trim().min(1).max(120),
+  crop: z.string().trim().min(1).max(120),
+  status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE")
+});
+const lotCreateSchema = z.object({ activityId:z.string().trim().min(1) });
+const lotStatusSchema = z.object({ status:z.enum(["IN_STOCK", "RESERVED", "SHIPPED", "VOID", "RECALLED"]), reason:z.string().trim().min(5).max(500) });
 
 // Helmet publishes conditional ESM/CJS exports. Normalize the export explicitly
 // so TypeScript/Vercel and local Node builds agree on the callable middleware.
@@ -87,6 +102,72 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
     response.json({ user: request.user });
   });
 
+  app.get("/api/integrations/status", auth.requireUser, auth.requireRole("ADMIN"), (_request, response) => {
+    response.json({
+      dataStore: { provider: config.DATA_DRIVER, configured: config.DATA_DRIVER === "google-sheets" },
+      line: { configured: Boolean(config.LINE_CHANNEL_SECRET && config.LINE_CHANNEL_ACCESS_TOKEN) },
+      ai: { provider: config.AI_PROVIDER, configured: config.AI_PROVIDER === "gemini" ? Boolean(config.GEMINI_API_KEY) : Boolean(config.OPENAI_API_KEY), model: config.AI_PROVIDER === "gemini" ? config.GEMINI_MODEL : config.OPENAI_EXTRACTION_MODEL },
+      publicTrace: { configured: config.publicTraceEnabled }
+    });
+  });
+
+  app.get("/api/farmers", auth.requireUser, async (_request, response, next) => {
+    try {
+      const [farmers, plots] = await Promise.all([repository.listFarmers(), repository.listPlots()]);
+      response.json({ farmers, plots });
+    } catch (error) { next(error); }
+  });
+
+  app.post("/api/farmers", auth.requireUser, auth.requireRole("ADMIN"), async (request, response, next) => {
+    try {
+      const input = farmerSchema.parse(request.body);
+      if (await repository.getFarmerByMemberCode(input.memberCode)) throw new HttpError(409, "MEMBER_CODE_EXISTS", "รหัสสมาชิกนี้ถูกใช้งานแล้ว");
+      const farmer = { farmerId: createId("FARM"), ...input };
+      await repository.saveFarmer(farmer);
+      await repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"FARMER", entityId:farmer.farmerId, actorId:request.user!.userId, action:"CREATE", after:farmer, occurredAt:new Date().toISOString() });
+      response.status(201).json({ farmer });
+    } catch (error) { next(error); }
+  });
+
+  app.patch("/api/farmers/:farmerId", auth.requireUser, auth.requireRole("ADMIN"), async (request, response, next) => {
+    try {
+      const before = await repository.getFarmer(request.params.farmerId as string);
+      if (!before) throw new HttpError(404, "FARMER_NOT_FOUND", "ไม่พบเกษตรกรที่ค้นหา");
+      const input = farmerSchema.partial().parse(request.body);
+      if (input.memberCode && input.memberCode.toLowerCase() !== before.memberCode.toLowerCase()) {
+        if (await repository.getFarmerByMemberCode(input.memberCode)) throw new HttpError(409, "MEMBER_CODE_EXISTS", "รหัสสมาชิกนี้ถูกใช้งานแล้ว");
+      }
+      const farmer = { ...before, memberCode:input.memberCode ?? before.memberCode, displayName:input.displayName ?? before.displayName, status:input.status ?? before.status };
+      await repository.saveFarmer(farmer);
+      await repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"FARMER", entityId:farmer.farmerId, actorId:request.user!.userId, action:"UPDATE", before, after:farmer, occurredAt:new Date().toISOString() });
+      response.json({ farmer });
+    } catch (error) { next(error); }
+  });
+
+  app.post("/api/plots", auth.requireUser, auth.requireRole("ADMIN"), async (request, response, next) => {
+    try {
+      const input = plotSchema.parse(request.body);
+      if (!await repository.getFarmer(input.farmerId)) throw new HttpError(404, "FARMER_NOT_FOUND", "ไม่พบเกษตรกรเจ้าของแปลง");
+      const plot = { plotId:createId("PLOT"), ...input };
+      await repository.savePlot(plot);
+      await repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"PLOT", entityId:plot.plotId, actorId:request.user!.userId, action:"CREATE", after:plot, occurredAt:new Date().toISOString() });
+      response.status(201).json({ plot });
+    } catch (error) { next(error); }
+  });
+
+  app.patch("/api/plots/:plotId", auth.requireUser, auth.requireRole("ADMIN"), async (request, response, next) => {
+    try {
+      const before = await repository.getPlot(request.params.plotId as string);
+      if (!before) throw new HttpError(404, "PLOT_NOT_FOUND", "ไม่พบแปลงที่ค้นหา");
+      const input = plotSchema.partial().parse(request.body);
+      if (input.farmerId && !await repository.getFarmer(input.farmerId)) throw new HttpError(404, "FARMER_NOT_FOUND", "ไม่พบเกษตรกรเจ้าของแปลง");
+      const plot = { ...before, farmerId:input.farmerId ?? before.farmerId, name:input.name ?? before.name, crop:input.crop ?? before.crop, status:input.status ?? before.status };
+      await repository.savePlot(plot);
+      await repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"PLOT", entityId:plot.plotId, actorId:request.user!.userId, action:"UPDATE", before, after:plot, occurredAt:new Date().toISOString() });
+      response.json({ plot });
+    } catch (error) { next(error); }
+  });
+
   app.get("/api/dashboard", auth.requireUser, async (_request, response, next) => {
     try {
       const [summary, activities, lots] = await Promise.all([
@@ -141,7 +222,15 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
           reason: input.reason,
           user: request.user!
         });
-        response.json({ activity });
+        let notificationSent = false;
+        if (input.decision === "REQUEST_INFO") {
+          const farmer = await repository.getFarmer(activity.farmerId);
+          if (farmer?.lineUserId) {
+            try { await pushLineText(config, farmer.lineUserId, `เจ้าหน้าที่ขอข้อมูลเพิ่มสำหรับรายการ ${activity.activityId}\nรายละเอียด: ${input.reason}\nกรุณาส่งข้อความเสียงใหม่ โดยบอกเลขที่รายการนี้ก่อนเริ่มพูด`); notificationSent = true; }
+            catch (error) { console.error(JSON.stringify({ level:"error", code:"LINE_PUSH_FAILED", activityId:activity.activityId, message:error instanceof Error ? error.message : String(error) })); }
+          }
+        }
+        response.json({ activity, notificationSent });
       } catch (error) {
         next(error);
       }
@@ -154,6 +243,61 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
     } catch (error) {
       next(error);
     }
+  });
+
+  app.post("/api/lots", auth.requireUser, auth.requireRole("WAREHOUSE", "ADMIN"), async (request, response, next) => {
+    try {
+      const input = lotCreateSchema.parse(request.body);
+      const activity = await repository.getActivity(input.activityId);
+      if (!activity) throw new HttpError(404, "ACTIVITY_NOT_FOUND", "ไม่พบกิจกรรมเก็บเกี่ยว");
+      if (activity.createdLotId) throw new HttpError(409, "LOT_EXISTS", "กิจกรรมนี้สร้างล็อตแล้ว");
+      if (activity.riskStatus !== "APPROVED") throw new HttpError(409, "ACTIVITY_NOT_APPROVED", "ต้องอนุมัติกิจกรรมก่อนสร้างล็อต");
+      if (!activity.crop || !activity.plotName || !activity.harvestAmount || !activity.harvestUnit) throw new HttpError(409, "HARVEST_DATA_INCOMPLETE", "ข้อมูลพืช แปลง ปริมาณ หรือหน่วยยังไม่ครบ");
+      const now = new Date().toISOString();
+      const lot = { lotId:createId("LOT"), activityId:activity.activityId, farmerId:activity.farmerId, farmerName:activity.farmerName, plotName:activity.plotName, crop:activity.crop, quantity:activity.harvestAmount, unit:activity.harvestUnit, harvestDate:activity.occurredAt.slice(0,10), inventoryStatus:"IN_STOCK" as const, traceToken:createTraceToken(), createdAt:now, updatedAt:now };
+      await repository.saveLot(lot);
+      await repository.saveActivity({ ...activity, createdLotId:lot.lotId, updatedAt:now });
+      await repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"LOT", entityId:lot.lotId, actorId:request.user!.userId, action:"CREATE_FROM_ACTIVITY", after:lot, occurredAt:now });
+      response.status(201).json({ lot });
+    } catch (error) { next(error); }
+  });
+
+  app.patch("/api/lots/:lotId/status", auth.requireUser, auth.requireRole("WAREHOUSE", "ADMIN"), async (request, response, next) => {
+    try {
+      const input = lotStatusSchema.parse(request.body);
+      const before = await repository.getLot(request.params.lotId as string);
+      if (!before) throw new HttpError(404, "LOT_NOT_FOUND", "ไม่พบล็อตที่ค้นหา");
+      const allowed: Record<string, string[]> = { IN_STOCK:["RESERVED", "SHIPPED", "VOID", "RECALLED"], RESERVED:["IN_STOCK", "SHIPPED", "VOID", "RECALLED"], SHIPPED:["RECALLED"], DRAFT:["IN_STOCK", "VOID"], RECALLED:[], VOID:[] };
+      if (!allowed[before.inventoryStatus]?.includes(input.status)) throw new HttpError(409, "INVALID_LOT_TRANSITION", "ไม่สามารถเปลี่ยนสถานะล็อตตามลำดับนี้ได้");
+      const lot = { ...before, inventoryStatus:input.status, updatedAt:new Date().toISOString() };
+      await repository.saveLot(lot);
+      await repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"LOT", entityId:lot.lotId, actorId:request.user!.userId, action:`STATUS_${input.status}`, reason:input.reason, before, after:lot, occurredAt:lot.updatedAt });
+      response.json({ lot });
+    } catch (error) { next(error); }
+  });
+
+  app.get("/api/reports/activities.csv", auth.requireUser, auth.requireRole("ADMIN", "AUDITOR"), async (_request, response, next) => {
+    try {
+      const rows = await repository.listActivities();
+      const quote = (value:unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+      const csv = [["activity_id","received_at","farmer","plot","crop","activity_type","risk_status","processing_status"], ...rows.map((x) => [x.activityId,x.receivedAt,x.farmerName,x.plotName,x.crop,x.activityType,x.riskStatus,x.processingStatus])].map((row) => row.map(quote).join(",")).join("\r\n");
+      await repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"REPORT", entityId:`activities-${new Date().toISOString().slice(0,10)}`, actorId:_request.user!.userId, action:"EXPORT_CSV", occurredAt:new Date().toISOString() });
+      response.setHeader("Content-Type", "text/csv; charset=utf-8");
+      response.setHeader("Content-Disposition", `attachment; filename="ics-activities-${new Date().toISOString().slice(0,10)}.csv"`);
+      response.send(`\uFEFF${csv}`);
+    } catch (error) { next(error); }
+  });
+
+  app.get("/api/lots/:lotId/qr.png", auth.requireUser, async (request, response, next) => {
+    try {
+      const lot = await repository.getLot(request.params.lotId as string);
+      if (!lot) throw new HttpError(404, "LOT_NOT_FOUND", "ไม่พบล็อตที่ค้นหา");
+      const traceUrl = new URL(`/trace/${encodeURIComponent(lot.traceToken)}`, config.APP_BASE_URL).toString();
+      const png = await QRCode.toBuffer(traceUrl, { type:"png", width:512, margin:2, errorCorrectionLevel:"M", color:{ dark:"#17372a", light:"#fffdf7" } });
+      response.setHeader("Content-Type", "image/png");
+      response.setHeader("Content-Disposition", `attachment; filename="${lot.lotId}-qr.png"`);
+      response.send(png);
+    } catch (error) { next(error); }
   });
 
   app.get("/api/trace/:token", async (request, response, next) => {

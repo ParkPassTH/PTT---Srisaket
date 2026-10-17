@@ -52,6 +52,18 @@ try {
   await desktop.locator("#dashboard-content").waitFor({ state: "visible" });
   await desktop.locator("#loading-state").waitFor({ state: "hidden" });
   await capture(desktop, "desktop");
+  await desktop.locator('[data-view="farmers"]').click();
+  await desktop.locator("#farmers-content").waitFor({ state:"visible" });
+  await capture(desktop, "farmers-desktop");
+  await desktop.locator('[data-view="integrations"]').click();
+  await desktop.locator("#integrations-content").waitFor({ state:"visible" });
+  await capture(desktop, "integrations-desktop");
+  await desktop.locator('[data-view="lots"]').click();
+  await desktop.locator("#lots-content").waitFor({ state:"visible" });
+  await capture(desktop, "lots-desktop");
+  await desktop.locator('[data-view="reports"]').click();
+  await desktop.locator("#reports-content").waitFor({ state:"visible" });
+  await capture(desktop, "reports-desktop");
 
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
   await mobile.goto(baseUrl, { waitUntil: "networkidle" });
@@ -72,9 +84,13 @@ try {
   }));
   console.log(JSON.stringify({ overflow }));
   await capture(mobile, "mobile");
+  await mobile.locator("#menu-button").click();
+  await mobile.locator('[data-view="farmers"]').click();
+  await mobile.locator("#farmers-content").waitFor({ state:"visible" });
+  await capture(mobile, "farmers-mobile");
 
   await browser.close();
-  console.log(JSON.stringify({ ok: true, captures: ["login-desktop.png", "desktop.png", "login-mobile.png", "mobile.png"] }));
+  console.log(JSON.stringify({ ok: true, captures: ["login-desktop.png", "desktop.png", "farmers-desktop.png", "integrations-desktop.png", "lots-desktop.png", "reports-desktop.png", "login-mobile.png", "mobile.png", "farmers-mobile.png"] }));
 } finally {
   server.kill();
 }

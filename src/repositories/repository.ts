@@ -1,4 +1,4 @@
-import type { Activity, AuditEvent, Farmer, Lot, Review } from "../domain/types.js";
+import type { Activity, AuditEvent, Farmer, Lot, Plot, Review } from "../domain/types.js";
 
 export interface ActivityFilters {
   status?: string;
@@ -26,7 +26,12 @@ export interface Repository {
   saveLot(lot: Lot): Promise<void>;
   getFarmerByLineUserId(lineUserId: string): Promise<Farmer | undefined>;
   getFarmerByMemberCode(memberCode: string): Promise<Farmer | undefined>;
+  listFarmers(): Promise<Farmer[]>;
+  getFarmer(farmerId: string): Promise<Farmer | undefined>;
   saveFarmer(farmer: Farmer): Promise<void>;
+  listPlots(farmerId?: string): Promise<Plot[]>;
+  getPlot(plotId: string): Promise<Plot | undefined>;
+  savePlot(plot: Plot): Promise<void>;
   saveAuditEvent(event: AuditEvent): Promise<void>;
   listAuditEvents(entityId: string): Promise<AuditEvent[]>;
 }

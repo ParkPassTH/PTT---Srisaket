@@ -26,7 +26,7 @@
 | F-005A | AI provider abstraction (OpenAI/Gemini) | ระบบ/Developer | Partial | มี VoiceAnalyzer contract และ Gemini adapter; OpenAI adapter ยังไม่เชื่อม |
 | F-006 | สกัดข้อมูลกิจกรรมตาม schema | ระบบ | Implemented | Gemini structured JSON + Zod validation; invalid output เป็น FAILED_RETRYABLE |
 | F-007 | ICS deterministic rule engine | ICS | In Progress | engine และ tests พร้อม; รอรายการสารฉบับอนุมัติ |
-| F-008 | Farmer confirmation ผ่าน LINE | เกษตรกร | Planned | ยืนยัน แก้ หรือขอความช่วยเหลือได้ |
+| F-008 | Farmer confirmation ผ่าน LINE | เกษตรกร | Partial | คำสั่ง `ยืนยัน <Activity ID>` พร้อมและมี audit; รอแก้ไขรายช่อง |
 | F-009 | Flex Message ผลสำเร็จ/ต้องตรวจ/ผิดพลาด | เกษตรกร | Planned | ภาษาไทยชัดเจน ไม่กล่าวโทษ และไม่พึ่งสีอย่างเดียว |
 | F-010 | Authentication สำหรับ Dashboard | เจ้าหน้าที่ | In Progress | local secure session พร้อม; รอ durable session/identity provider |
 | F-011 | Role-based access control | เจ้าหน้าที่ | In Progress | API role checks พร้อม; รอ user management |
@@ -35,11 +35,11 @@
 | F-014 | Review detail พร้อมหลักฐาน | ICS | In Progress | transcript/extraction/rule/audit พร้อม; รอ audio player |
 | F-015 | Approve / Flag / Request info / Void | ICS | In Progress | approve/flag/request พร้อม; รอ void confirmation flow |
 | F-016 | Activity registry | ICS | Done | ค้น กรอง และเปิดรายละเอียดกิจกรรมได้ |
-| F-017 | สร้างล็อตจากกิจกรรมเก็บเกี่ยว | ICS/Warehouse | Planned | ตรวจข้อมูลครบและ block เมื่อมี risk เปิดอยู่ |
-| F-018 | Lot ID ที่ไม่ซ้ำ | ระบบ | Planned | concurrent creation ไม่สร้างรหัสซ้ำ |
-| F-019 | QR และ trace URL | Warehouse | Planned | QR ไม่มี PII/secret และเปิดหน้า trace ได้ |
-| F-020 | Inventory status workflow | Warehouse | Planned | transition ตามกฎและเก็บเหตุผล/ผู้ดำเนินการ |
-| F-021 | Public trace page | ผู้ตรวจสอบ | In Progress | privacy-safe API พร้อม; รอหน้า UI และ invalid/void states |
+| F-017 | สร้างล็อตจากกิจกรรมเก็บเกี่ยว | ICS/Warehouse | Done | ต้องอนุมัติและมีพืช แปลง ปริมาณ หน่วยครบ |
+| F-018 | Lot ID ที่ไม่ซ้ำ | ระบบ | Done | UUID-based ID และป้องกันสร้างซ้ำจากกิจกรรมเดียว |
+| F-019 | QR และ trace URL | Warehouse | Done | ดาวน์โหลด QR PNG ที่บรรจุ opaque trace token ไม่มี PII |
+| F-020 | Inventory status workflow | Warehouse | Done | transition ตามกฎ เก็บเหตุผล ผู้ทำ และ audit |
+| F-021 | Public trace page | ผู้ตรวจสอบ | Done | privacy-safe UI รองรับ invalid/void/recall states |
 | F-022 | Audit trail | Auditor/Admin | In Progress | review audit พร้อม; รอครอบคลุมทุก entity |
 | F-023 | Google Sheets repository adapter | ระบบ | Implemented | สร้าง headers อัตโนมัติและอ่าน/เขียนผ่าน Repository contract |
 | F-024 | Retry, outbox และ dead-letter handling | ระบบ/Admin | Planned | งานชั่วคราว retry; งานเกินกำหนดกู้จาก Dashboard ได้ |
@@ -58,9 +58,9 @@
 | F-101 | Rich Menu สำหรับ LINE | เกษตรกร | Planned | บันทึกเสียง / บันทึกของฉัน / ช่วยเหลือ |
 | F-102 | Farmer history ผ่าน LINE | เกษตรกร | Planned | แสดงเฉพาะข้อมูลของบัญชีที่ผูกแล้ว |
 | F-103 | Notification escalation | ICS/Admin | Planned | แจ้งรายการ high risk ตาม SLA |
-| F-104 | Reports และ CSV export | ICS/Auditor | Planned | export ตามสิทธิ์และ log การดาวน์โหลด |
+| F-104 | Reports และ CSV export | ICS/Auditor | Done | export CSV ตามสิทธิ์และบันทึก audit |
 | F-105 | Rule management UI | Admin | Planned | draft/publish/version/rollback |
-| F-106 | System status panel | Admin | Planned | queue depth, sync lag, failures, quota |
+| F-106 | System status panel | Admin | Partial | แสดง readiness ของ Sheets, LINE, AI, trace; รอ quota/queue metrics |
 | F-107 | Data correction workflow | ICS | Planned | correction ไม่เขียนทับหลักฐานต้นทาง |
 | F-108 | Lot recall workflow | Warehouse/Admin | Planned | RECALL พร้อมเหตุผลและผลกระทบ |
 

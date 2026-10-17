@@ -2,7 +2,7 @@
 
 > ทุก task ต้องอ้างอิง Feature ID เมื่อเกี่ยวข้อง และอัปเดตสถานะพร้อม `WORKLOG.md`
 >
-> อัปเดตล่าสุด: 17 ตุลาคม 2569
+> อัปเดตล่าสุด: 18 ตุลาคม 2569
 
 ## สถานะ
 
@@ -46,7 +46,7 @@
 - [x] T-205A AI provider contract และ Gemini adapter — F-005A (OpenAI adapter ยังไม่รวม)
 - [x] T-206 structured extraction + schema validation — F-006
 - [-] T-207 deterministic ICS rule engine + test fixtures — engine พร้อม รอ approved rules
-- [ ] T-208 confirmation and correction conversation — F-008
+- [-] T-208 confirmation and correction conversation — ยืนยันรายการผ่าน LINE พร้อม; รอแก้ไขรายช่อง — F-008
 - [ ] T-209 Flex Message templates + accessible wording — F-009
 - [ ] T-210 retry/outbox/dead-letter workflow — F-024
 
@@ -59,18 +59,19 @@
 - [-] T-305 review detail/evidence player — หลักฐานพร้อม รอ audio player
 - [-] T-306 review actions and audit — flow หลักพร้อม รอ void confirmation
 - [x] T-307 activity registry — F-016
-- [ ] T-308 farmer/plot registry — F-003, F-016
+- [x] T-308 farmer/plot registry — เพิ่มสมาชิก/แปลงจากเว็บ, Google Sheets persistence และ audit — F-003, F-016
+- [x] T-310 integration status panel — ตรวจ Sheets, LINE, AI และ public trace โดยไม่เผย secret — F-106
 - [-] T-309 responsive and accessibility verification — desktop/mobile captures พร้อม รอ formal audit
 
 ## Phase 4 — Inventory และ Traceability
 
-- [ ] T-401 harvest eligibility service — F-017
-- [ ] T-402 unique Lot ID generator — F-018
-- [ ] T-403 QR/trace token service — F-019
-- [ ] T-404 inventory workflow — F-020
-- [ ] T-405 lot dashboard/detail — F-020
-- [ ] T-406 public trace page — F-021
-- [ ] T-407 recall/void scenarios — F-108
+- [x] T-401 harvest eligibility service — อนุมัติและข้อมูลเก็บเกี่ยวครบก่อนสร้าง — F-017
+- [x] T-402 unique Lot ID generator — UUID-based — F-018
+- [x] T-403 QR/trace token service — random trace token และ PNG download — F-019
+- [x] T-404 inventory workflow — ตรวจ transition และบังคับเหตุผล — F-020
+- [x] T-405 lot dashboard/detail — สร้างล็อต ดูสถานะ และเปลี่ยนสถานะ — F-020
+- [x] T-406 public trace page — privacy-safe UI พร้อม invalid/void/recall states — F-021
+- [x] T-407 recall/void scenarios — terminal states พร้อม audit — F-108
 
 ## Phase 5 — Operations และ Deployment
 
@@ -90,11 +91,11 @@
 - [ ] T-604 security review
 - [ ] T-605 accessibility audit
 - [x] T-606 desktop/mobile visual QA
-- [ ] T-607 operator manual
+- [-] T-607 operator manual — integration/testing guide พร้อม; กำลังเพิ่ม dashboard operations
 - [x] T-608 troubleshooting guide
 - [ ] T-609 deployment verification checklist
 - [ ] T-610 final feature/task reconciliation
 
 ## Current Gate
 
-ต้องเลือกทิศทาง UX/UI ก่อนเริ่ม T-301 และงาน implementation ที่สร้างหน้าจอ โดยตัวเลือกที่รอยืนยันอยู่ใน `.impeccable/mocks/decision/`
+ทดสอบ production end-to-end ด้วยข้อมูลจริง: เพิ่มสมาชิก/แปลงจาก Dashboard → ลงทะเบียน LINE → ส่งเสียง → ยืนยัน/ตรวจสอบ → สร้างล็อต → ดาวน์โหลด QR → เปิด public trace

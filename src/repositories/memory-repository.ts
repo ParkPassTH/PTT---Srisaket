@@ -1,4 +1,4 @@
-import type { Activity, AuditEvent, Farmer, Lot, Review } from "../domain/types.js";
+import type { Activity, AuditEvent, Farmer, Lot, Plot, Review } from "../domain/types.js";
 import type { ActivityFilters, Repository } from "./repository.js";
 
 /** Empty, process-local repository for tests and local development only. */
@@ -6,6 +6,7 @@ export class MemoryRepository implements Repository {
   private activities = new Map<string, Activity>();
   private lots = new Map<string, Lot>();
   private farmers = new Map<string, Farmer>();
+  private plots = new Map<string, Plot>();
   private reviews: Review[] = [];
   private auditEvents: AuditEvent[] = [];
 
@@ -42,7 +43,12 @@ export class MemoryRepository implements Repository {
   async saveLot(item: Lot) { this.lots.set(item.lotId, structuredClone(item)); }
   async getFarmerByLineUserId(id: string) { const item = [...this.farmers.values()].find((value) => value.lineUserId === id); return item ? structuredClone(item) : undefined; }
   async getFarmerByMemberCode(code: string) { const item = [...this.farmers.values()].find((value) => value.memberCode.toLowerCase() === code.toLowerCase()); return item ? structuredClone(item) : undefined; }
+  async listFarmers() { return [...this.farmers.values()].sort((a, b) => a.memberCode.localeCompare(b.memberCode)).map((item) => structuredClone(item)); }
+  async getFarmer(id: string) { const item = this.farmers.get(id); return item ? structuredClone(item) : undefined; }
   async saveFarmer(item: Farmer) { this.farmers.set(item.farmerId, structuredClone(item)); }
+  async listPlots(farmerId?: string) { return [...this.plots.values()].filter((item) => !farmerId || item.farmerId === farmerId).map((item) => structuredClone(item)); }
+  async getPlot(id: string) { const item = this.plots.get(id); return item ? structuredClone(item) : undefined; }
+  async savePlot(item: Plot) { this.plots.set(item.plotId, structuredClone(item)); }
   async saveAuditEvent(item: AuditEvent) { this.auditEvents.push(structuredClone(item)); }
   async listAuditEvents(id: string) { return this.auditEvents.filter((item) => item.entityId === id).map((item) => structuredClone(item)); }
 }

@@ -40,6 +40,7 @@ export interface Plot {
   farmerId: string;
   name: string;
   crop: string;
+  status: "ACTIVE" | "INACTIVE";
 }
 
 export interface ExtractedActivity {
@@ -113,7 +114,7 @@ export interface Lot {
 
 export interface AuditEvent {
   auditId: string;
-  entityType: "ACTIVITY" | "LOT" | "USER" | "RULE";
+  entityType: "ACTIVITY" | "LOT" | "FARMER" | "PLOT" | "REPORT" | "USER" | "RULE";
   entityId: string;
   actorId: string;
   action: string;

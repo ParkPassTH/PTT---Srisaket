@@ -23,7 +23,7 @@ describe("HTTP API", () => {
   beforeEach(async () => {
     const repository = new MemoryRepository();
     const now = new Date().toISOString();
-    await repository.saveActivity({ activityId:"ACT-TEST-001", sourceEventId:"event-test-001", farmerId:"F-TEST", farmerName:"ผู้ทดสอบ", occurredAt:now, receivedAt:now, transcript:"ทดสอบกิจกรรม", processingStatus:"NEEDS_REVIEW", riskStatus:"NEEDS_REVIEW", confidence:0.8, flagReasons:["ทดสอบ"], matchedTerms:[], updatedAt:now });
+    await repository.saveActivity({ activityId:"ACT-TEST-001", sourceEventId:"event-test-001", farmerId:"F-TEST", farmerName:"ผู้ทดสอบ", plotName:"แปลงทดสอบ", crop:"พืชทดสอบ", activityType:"เก็บเกี่ยว", harvestAmount:12, harvestUnit:"กก.", occurredAt:now, receivedAt:now, transcript:"ทดสอบกิจกรรม", processingStatus:"NEEDS_REVIEW", riskStatus:"NEEDS_REVIEW", confidence:0.8, flagReasons:["ทดสอบ"], matchedTerms:[], updatedAt:now });
     await repository.saveLot({ lotId:"LOT-TEST-001", activityId:"ACT-TEST-001", farmerId:"F-TEST", farmerName:"ผู้ทดสอบ", plotName:"แปลงทดสอบ", crop:"พืชทดสอบ", quantity:1, unit:"กก.", harvestDate:now.slice(0,10), inventoryStatus:"IN_STOCK", traceToken:"trace-test-001", createdAt:now, updatedAt:now });
     app = createApp({ config: testConfig, repository });
   });
@@ -78,6 +78,50 @@ describe("HTTP API", () => {
     const detail = await agent.get("/api/activities/ACT-TEST-001");
     assert.equal(detail.body.reviews.length, 1);
     assert.equal(detail.body.audit.length, 1);
+  });
+
+  it("creates farmers and plots from the dashboard API", async () => {
+    const agent = request.agent(app);
+    await agent.post("/api/auth/login").send({ email:"admin@example.com", password:"secure-test-password" });
+    const farmerResponse = await agent.post("/api/farmers").send({ memberCode:"M001", displayName:"สมหญิง ใจดี" });
+    assert.equal(farmerResponse.status, 201);
+    assert.equal(farmerResponse.body.farmer.status, "ACTIVE");
+
+    const duplicate = await agent.post("/api/farmers").send({ memberCode:"m001", displayName:"ชื่อซ้ำ" });
+    assert.equal(duplicate.status, 409);
+
+    const plotResponse = await agent.post("/api/plots").send({ farmerId:farmerResponse.body.farmer.farmerId, name:"แปลงเหนือ", crop:"หอมแดง" });
+    assert.equal(plotResponse.status, 201);
+    const registry = await agent.get("/api/farmers");
+    assert.equal(registry.body.farmers.length, 1);
+    assert.equal(registry.body.plots[0].crop, "หอมแดง");
+  });
+
+  it("reports integration readiness without exposing secrets", async () => {
+    const agent = request.agent(app);
+    await agent.post("/api/auth/login").send({ email:"admin@example.com", password:"secure-test-password" });
+    const response = await agent.get("/api/integrations/status");
+    assert.equal(response.status, 200);
+    assert.equal(response.body.dataStore.provider, "memory");
+    assert.equal(response.body.ai.provider, "gemini");
+    assert.equal(JSON.stringify(response.body).includes("gemini-test"), false);
+  });
+
+  it("creates a traceable lot from an approved harvest and exports CSV", async () => {
+    const agent = request.agent(app);
+    await agent.post("/api/auth/login").send({ email:"admin@example.com", password:"secure-test-password" });
+    await agent.post("/api/activities/ACT-TEST-001/review").send({ decision:"APPROVE", reason:"ตรวจข้อมูลเก็บเกี่ยวครบถ้วนแล้ว" });
+    const created = await agent.post("/api/lots").send({ activityId:"ACT-TEST-001" });
+    assert.equal(created.status, 201);
+    assert.equal(created.body.lot.inventoryStatus, "IN_STOCK");
+    const trace = await request(app).get(`/api/trace/${created.body.lot.traceToken}`);
+    assert.equal(trace.body.lot.crop, "พืชทดสอบ");
+    const qr = await agent.get(`/api/lots/${created.body.lot.lotId}/qr.png`);
+    assert.equal(qr.status, 200);
+    assert.match(qr.headers["content-type"] ?? "", /image\/png/);
+    const report = await agent.get("/api/reports/activities.csv");
+    assert.match(report.headers["content-type"] ?? "", /text\/csv/);
+    assert.match(report.text, /ACT-TEST-001/);
   });
 
   it("exposes only privacy-safe trace fields", async () => {

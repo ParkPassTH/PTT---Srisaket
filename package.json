@@ -23,11 +23,13 @@
     "googleapis": "^160.0.0",
     "helmet": "8.3.0",
     "openai": "^4.77.0",
+    "qrcode": "^1.5.4",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.5",
+    "@types/qrcode": "^1.5.6",
     "@types/supertest": "^6.0.2",
     "playwright-core": "^1.55.0",
     "supertest": "^7.0.0",

@@ -39,4 +39,17 @@ describe("LINE voice pipeline", () => {
     assert.ok(requests.some((url) => url.includes("api-data.line.me")));
     assert.ok(requests.some((url) => url.includes("api.line.me/v2/bot/message/reply")));
   });
+
+  it("lets the linked farmer confirm a provisionally clear record", async () => {
+    const repository = new MemoryRepository();
+    await repository.saveFarmer({ farmerId:"F-001", memberCode:"M001", displayName:"ผู้ทดสอบ", lineUserId:"U-REAL", status:"ACTIVE" });
+    await repository.saveActivity({ activityId:"ACT-1700000000000-123456", sourceEventId:"voice-1", farmerId:"F-001", farmerName:"ผู้ทดสอบ", occurredAt:new Date().toISOString(), receivedAt:new Date().toISOString(), processingStatus:"NEEDS_CONFIRMATION", riskStatus:"PROVISIONALLY_CLEAR", confidence:0.9, flagReasons:[], matchedTerms:[], updatedAt:new Date().toISOString() });
+    globalThis.fetch = async () => new Response("{}", { status:200 });
+    const service = new LineService(config, repository);
+    const body = Buffer.from(JSON.stringify({ events:[{ type:"message", webhookEventId:"confirm-1", replyToken:"reply-confirm", timestamp:2, source:{ type:"user", userId:"U-REAL" }, message:{ type:"text", id:"text-confirm", text:"ยืนยัน ACT-1700000000000-123456" } }] }));
+    const result = await service.acceptWebhook(body, sign(body));
+    assert.equal(result.accepted, 1);
+    assert.equal((await repository.getActivity("ACT-1700000000000-123456"))?.processingStatus, "COMPLETED");
+    assert.equal((await repository.listAuditEvents("ACT-1700000000000-123456"))[0]?.action, "FARMER_CONFIRM");
+  });
 });
