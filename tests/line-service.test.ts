@@ -14,6 +14,7 @@ const sign = (body: Buffer) => createHmac("sha256", config.LINE_CHANNEL_SECRET!)
 describe("LINE voice pipeline", () => {
   it("links a LINE user with a member code", async () => {
     const repository = new MemoryRepository();
+    await repository.saveFarmer({ farmerId:"F-001", memberCode:"M001", displayName:"ผู้ทดสอบ", status:"ACTIVE" });
     globalThis.fetch = async () => new Response("{}", { status: 200 });
     const service = new LineService(config, repository);
     const body = Buffer.from(JSON.stringify({ events: [{ type:"message", webhookEventId:"register-1", replyToken:"reply-1", timestamp:1, source:{ type:"user", userId:"U-REAL" }, message:{ type:"text", id:"text-1", text:"ลงทะเบียน M001" } }] }));
@@ -24,8 +25,7 @@ describe("LINE voice pipeline", () => {
 
   it("downloads, analyzes, evaluates and persists an audio event", async () => {
     const repository = new MemoryRepository();
-    const farmer = await repository.getFarmerByMemberCode("M001");
-    await repository.saveFarmer({ ...farmer!, lineUserId:"U-REAL" });
+    await repository.saveFarmer({ farmerId:"F-001", memberCode:"M001", displayName:"ผู้ทดสอบ", lineUserId:"U-REAL", status:"ACTIVE" });
     const requests: string[] = [];
     globalThis.fetch = async (input) => { requests.push(String(input)); return String(input).includes("api-data.line.me") ? new Response(Buffer.from("audio"), { status:200, headers:{ "content-type":"audio/mp4" } }) : new Response("{}", { status:200 }); };
     const analyzer: VoiceAnalyzer = { analyze: async () => ({ transcript:"วันนี้ใส่ปุ๋ยคอกที่แปลง P-001 ปลูกถั่วเหลือง", plotName:"แปลงหนึ่ง", extracted:{ plotId:"P-001", crop:"ถั่วเหลือง", activityType:"บำรุงดิน", inputsUsed:"ปุ๋ยคอก", isHarvesting:false, fieldConfidence:{ plotId:0.95,crop:0.95,activityType:0.9,inputsUsed:0.9 } } }) };

@@ -94,6 +94,9 @@ async function loadDashboard() {
 
 function renderDashboard() {
   const { summary, activities } = state.dashboard;
+  const usesSheets = state.dashboard.dataSource === "google-sheets";
+  $("#system-status").textContent = usesSheets ? "ระบบข้อมูลจริงพร้อมใช้" : "โหมดทดสอบชั่วคราว";
+  $("#system-source").textContent = usesSheets ? "เชื่อมต่อ Google Sheets" : "ข้อมูลจะหายเมื่อระบบเริ่มใหม่";
   $("#metric-pending").textContent = summary.pendingReview;
   $("#metric-risk").textContent = summary.highRisk;
   $("#metric-today").textContent = summary.recordedToday;
@@ -117,7 +120,7 @@ function renderDashboard() {
     ["ถอดเสียงและสกัดข้อมูล", latest.transcript ? "ดำเนินการแล้ว" : "กำลังประมวลผล", !latest.transcript],
     [latest.riskStatus === "FLAGGED_HIGH" ? "ตรวจพบความเสี่ยง" : "ประเมินกฎ ICS", riskMeta[latest.riskStatus]?.[0] || latest.riskStatus, false],
     ["ผลการตรวจ", latest.processingStatus === "COMPLETED" ? "ดำเนินการแล้ว" : "รอเจ้าหน้าที่", latest.processingStatus !== "COMPLETED"]
-  ].map(([title, detail, pending]) => `<div class="trace-step ${pending ? "pending" : ""}"><span class="trace-node"></span><div><strong>${escapeHtml(title)}</strong><small>${escapeHtml(detail)}</small></div></div>`).join("") : "";
+  ].map(([title, detail, pending]) => `<div class="trace-step ${pending ? "pending" : ""}"><span class="trace-node"></span><div><strong>${escapeHtml(title)}</strong><small>${escapeHtml(detail)}</small></div></div>`).join("") : `<div class="empty-state"><strong>ยังไม่มีเส้นทางงาน</strong><p>เมื่อรับเสียงรายการแรก ขั้นตอนประมวลผลจะแสดงที่นี่</p></div>`;
 
   renderActivityTable(activities);
 }
@@ -135,6 +138,11 @@ function renderActivityTable(activities) {
       <td><button class="row-button" data-activity-id="${escapeHtml(item.activityId)}" aria-label="เปิดรายละเอียด ${escapeHtml(item.farmerName)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></td>
     </tr>`).join("");
   empty.hidden = activities.length > 0;
+  if (!activities.length) {
+    const hasFilter = Boolean($("#activity-search").value || $("#risk-filter").value);
+    $("#empty-title").textContent = hasFilter ? "ไม่พบรายการที่ตรงกับตัวกรอง" : "ยังไม่มีกิจกรรมจริง";
+    $("#empty-description").textContent = hasFilter ? "ลองล้างคำค้นหาหรือเลือกสถานะอื่น" : "เชื่อมบัญชีเกษตรกรใน LINE แล้วส่งข้อความเสียง รายการแรกจะปรากฏที่นี่";
+  }
 }
 
 async function openActivity(activityId) {

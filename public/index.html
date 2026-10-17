@@ -88,7 +88,7 @@
         </button>
       </nav>
       <div class="sidebar-foot">
-        <div class="system-health"><span class="health-dot"></span><div><strong>ระบบทำงานปกติ</strong><small>ตรวจล่าสุดเมื่อสักครู่</small></div></div>
+        <div class="system-health"><span class="health-dot"></span><div><strong id="system-status">กำลังตรวจระบบ</strong><small id="system-source">กำลังตรวจแหล่งข้อมูล...</small></div></div>
         <button id="logout-button" class="nav-item">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
           ออกจากระบบ
@@ -139,7 +139,7 @@
 
         <section class="registry-panel">
           <header class="panel-head table-head">
-            <div><h2>กิจกรรมล่าสุด</h2><p>ข้อมูลตัวอย่างสำหรับตรวจโครงสร้างระบบ</p></div>
+            <div><h2>กิจกรรมล่าสุด</h2><p>ข้อมูลจริงที่รับจาก LINE และผ่านการประมวลผล</p></div>
             <div class="filters">
               <label class="search-field">
                 <span class="visually-hidden">ค้นหากิจกรรม</span>
@@ -161,7 +161,7 @@
               <tbody id="activity-table"></tbody>
             </table>
           </div>
-          <div id="empty-state" class="empty-state" hidden><strong>ไม่พบรายการที่ตรงกับตัวกรอง</strong><p>ลองล้างคำค้นหาหรือเลือกสถานะอื่น</p></div>
+          <div id="empty-state" class="empty-state" hidden><strong id="empty-title">ยังไม่มีกิจกรรมจริง</strong><p id="empty-description">เชื่อมบัญชีเกษตรกรใน LINE แล้วส่งข้อความเสียง รายการแรกจะปรากฏที่นี่</p></div>
         </section>
       </div>
     </main>

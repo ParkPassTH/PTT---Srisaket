@@ -20,8 +20,12 @@ const testConfig = loadConfig({
 describe("HTTP API", () => {
   let app: ReturnType<typeof createApp>;
 
-  beforeEach(() => {
-    app = createApp({ config: testConfig, repository: new MemoryRepository() });
+  beforeEach(async () => {
+    const repository = new MemoryRepository();
+    const now = new Date().toISOString();
+    await repository.saveActivity({ activityId:"ACT-TEST-001", sourceEventId:"event-test-001", farmerId:"F-TEST", farmerName:"ผู้ทดสอบ", occurredAt:now, receivedAt:now, transcript:"ทดสอบกิจกรรม", processingStatus:"NEEDS_REVIEW", riskStatus:"NEEDS_REVIEW", confidence:0.8, flagReasons:["ทดสอบ"], matchedTerms:[], updatedAt:now });
+    await repository.saveLot({ lotId:"LOT-TEST-001", activityId:"ACT-TEST-001", farmerId:"F-TEST", farmerName:"ผู้ทดสอบ", plotName:"แปลงทดสอบ", crop:"พืชทดสอบ", quantity:1, unit:"กก.", harvestDate:now.slice(0,10), inventoryStatus:"IN_STOCK", traceToken:"trace-test-001", createdAt:now, updatedAt:now });
+    app = createApp({ config: testConfig, repository });
   });
 
   it("returns health without authentication", async () => {
@@ -54,8 +58,9 @@ describe("HTTP API", () => {
 
     const dashboard = await agent.get("/api/dashboard");
     assert.equal(dashboard.status, 200);
-    assert.ok(dashboard.body.summary.pendingReview > 0);
-    assert.equal(dashboard.body.activities.length, 3);
+    assert.equal(dashboard.body.summary.pendingReview, 1);
+    assert.equal(dashboard.body.activities.length, 1);
+    assert.equal(dashboard.body.dataSource, "memory");
   });
 
   it("records a review and audit event", async () => {
@@ -65,20 +70,20 @@ describe("HTTP API", () => {
       password: "secure-test-password"
     });
     const reviewed = await agent
-      .post("/api/activities/ACT-691017-025/review")
+      .post("/api/activities/ACT-TEST-001/review")
       .send({ decision: "APPROVE", reason: "ตรวจหลักฐานและยืนยันกับเกษตรกรแล้ว" });
     assert.equal(reviewed.status, 200);
     assert.equal(reviewed.body.activity.riskStatus, "APPROVED");
 
-    const detail = await agent.get("/api/activities/ACT-691017-025");
+    const detail = await agent.get("/api/activities/ACT-TEST-001");
     assert.equal(detail.body.reviews.length, 1);
     assert.equal(detail.body.audit.length, 1);
   });
 
   it("exposes only privacy-safe trace fields", async () => {
-    const response = await request(app).get("/api/trace/demo-soy-691016-ld-01");
+    const response = await request(app).get("/api/trace/trace-test-001");
     assert.equal(response.status, 200);
-    assert.equal(response.body.lot.lotId, "SOY-691016-LD-01");
+    assert.equal(response.body.lot.lotId, "LOT-TEST-001");
     assert.equal(response.body.lot.farmerName, undefined);
     assert.equal(response.body.lot.farmerId, undefined);
   });

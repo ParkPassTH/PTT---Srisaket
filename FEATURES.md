@@ -90,5 +90,6 @@
 | 17 ต.ค. 2569 | เพิ่ม human review, audit, retry, idempotency, RBAC และ privacy | จำเป็นต่อความน่าเชื่อถือและ production readiness | Codex |
 | 17 ต.ค. 2569 | เริ่ม foundation implementation และอัปเดตสถานะ F-001–F-030 ตามหลักฐานจริง | Dashboard/API/test milestone แรกพร้อม แต่ integration ภายนอกยังไม่ครบ | Codex |
 | 18 ต.ค. 2569 | Implement Gate A–C: Google Sheets, LINE linking/audio และ Gemini pipeline | พร้อม deploy และทดสอบด้วย credentials จริง; OpenAI adapter/outbox ยังอยู่นอกขอบเขตรอบนี้ | Codex |
+| 18 ต.ค. 2569 | ลบข้อมูล mock ออกจาก runtime และเพิ่ม empty state/ป้ายแหล่งข้อมูล | Dashboard แสดงเฉพาะข้อมูลจริงจาก repository; test fixtures อยู่เฉพาะใน tests | Codex |
 | 17 ต.ค. 2569 | เพิ่มคู่มือ integration แบบแบ่ง Gate A–D โดยไม่เปลี่ยนขอบเขตฟีเจอร์ | ทำให้แยกสถานะ memory demo ออกจาก Sheets/LINE/OpenAI จริงและทดสอบระดับถัดไปได้ | Codex |
 | 18 ต.ค. 2569 | เพิ่ม Gemini เป็นทางเลือก Gate C ผ่าน provider abstraction | ลด vendor lock-in; Gemini รองรับ audio transcription และ structured output แต่ยังไม่ implement adapter | Codex |

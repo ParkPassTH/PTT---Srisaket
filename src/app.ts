@@ -94,7 +94,7 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
         repository.listActivities(),
         repository.listLots()
       ]);
-      response.json({ summary, activities: activities.slice(0, 8), lots: lots.slice(0, 5) });
+      response.json({ summary, activities: activities.slice(0, 8), lots: lots.slice(0, 5), dataSource: config.DATA_DRIVER });
     } catch (error) {
       next(error);
     }
