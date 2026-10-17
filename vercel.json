@@ -8,8 +8,9 @@
     }
   },
   "rewrites": [
-    { "source": "/webhooks/:path*", "destination": "/api" },
-    { "source": "/api/:path*", "destination": "/api" },
+    { "source": "/health", "destination": "/api?__path=/health" },
+    { "source": "/webhooks/:path*", "destination": "/api?__path=/webhooks/:path*" },
+    { "source": "/api/:path*", "destination": "/api?__path=/api/:path*" },
     { "source": "/", "destination": "/index.html" }
   ]
 }

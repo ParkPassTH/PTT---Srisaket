@@ -185,3 +185,4 @@
 - ใช้เพื่อวินิจฉัย deployment `ptt-srisaket.vercel.app` ซึ่ง `/health` ตอบ 500 ก่อนเข้า Express route
 - Function Logs ยืนยันสาเหตุจริง: Express framework auto-detection เลือก `src/app.ts` แทน `api/index.ts`
 - ปิด framework preset ด้วย `framework: null` เพื่อให้ Vercel ใช้ function entrypoint ที่กำหนดไว้
+- เพิ่ม original-path forwarding สำหรับ `/health`, `/api/*` และ `/webhooks/*` เพราะ Vercel internal rewrite ส่ง destination path เข้า backend

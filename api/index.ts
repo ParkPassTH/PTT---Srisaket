@@ -1,7 +1,8 @@
 import { createApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
 import { MemoryRepository } from "../src/repositories/memory-repository.js";
-import express from "express";
+import express, { type Application } from "express";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
 
 function describeStartupError(error: unknown) {
@@ -17,7 +18,7 @@ function describeStartupError(error: unknown) {
   return "Application startup failed. Check Vercel Function logs.";
 }
 
-let app;
+let app: Application;
 
 try {
   const config = loadConfig();
@@ -41,4 +42,13 @@ try {
   });
 }
 
-export default app;
+export default function handler(request: IncomingMessage, response: ServerResponse) {
+  const requestUrl = new URL(request.url ?? "/", "https://internal.vercel");
+  const originalPath = requestUrl.searchParams.get("__path");
+  if (originalPath) {
+    requestUrl.searchParams.delete("__path");
+    const query = requestUrl.searchParams.toString();
+    request.url = `${originalPath}${query ? `?${query}` : ""}`;
+  }
+  return app(request, response);
+}
