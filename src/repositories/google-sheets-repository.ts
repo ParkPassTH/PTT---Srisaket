@@ -46,25 +46,29 @@ export class GoogleSheetsRepository implements Repository {
     }
     for (const [title, headers] of Object.entries(TABLES)) {
       const result = await this.sheets.spreadsheets.values.get({ spreadsheetId: this.spreadsheetId, range: `'${title}'!1:1` });
-      if (!(result.data.values?.[0]?.length)) {
-        await this.sheets.spreadsheets.values.update({ spreadsheetId: this.spreadsheetId, range: `'${title}'!A1`, valueInputOption: "RAW", requestBody: { values: [[...headers]] } });
+      const existingHeaders = (result.data.values?.[0] ?? []).map(String);
+      const missingHeaders = headers.filter((header) => !existingHeaders.includes(header));
+      if (!existingHeaders.length || missingHeaders.length) {
+        await this.sheets.spreadsheets.values.update({ spreadsheetId: this.spreadsheetId, range: `'${title}'!A1`, valueInputOption: "RAW", requestBody: { values: [[...existingHeaders, ...missingHeaders]] } });
       }
     }
   }
 
-  private async rows(table: TableName): Promise<Row[]> {
+  private async tableData(table: TableName): Promise<{ headers: string[]; rows: Row[] }> {
     await this.ensureSchema();
-    const headers = TABLES[table];
-    const result = await this.sheets.spreadsheets.values.get({ spreadsheetId: this.spreadsheetId, range: `'${table}'!A2:${columnName(headers.length)}` });
-    return (result.data.values ?? []).map((values) => Object.fromEntries(headers.map((header, index) => [header, String(values[index] ?? "")])));
+    const result = await this.sheets.spreadsheets.values.get({ spreadsheetId: this.spreadsheetId, range: `'${table}'!A1:ZZ` });
+    const values = result.data.values ?? [];
+    const headers = (values[0] ?? []).map(String);
+    return { headers, rows: values.slice(1).map((row) => Object.fromEntries(headers.map((header, index) => [header, String(row[index] ?? "")]))) };
   }
+
+  private async rows(table: TableName) { return (await this.tableData(table)).rows; }
 
   private async upsert(table: TableName, key: string, value: string, data: Row) {
     await this.ensureSchema();
-    const headers = TABLES[table];
-    const existing = await this.rows(table);
+    const { headers, rows: existing } = await this.tableData(table);
     const index = existing.findIndex((row) => row[key] === value);
-    const values = headers.map((header) => data[header] ?? "");
+    const values = headers.map((header) => data[header] ?? (index >= 0 ? existing[index]?.[header] : "") ?? "");
     if (index < 0) {
       await this.sheets.spreadsheets.values.append({ spreadsheetId: this.spreadsheetId, range: `'${table}'!A:${columnName(headers.length)}`, valueInputOption: "RAW", insertDataOption: "INSERT_ROWS", requestBody: { values: [values] } });
     } else {
@@ -75,7 +79,7 @@ export class GoogleSheetsRepository implements Repository {
 
   private async append(table: TableName, data: Row) {
     await this.ensureSchema();
-    const headers = TABLES[table];
+    const { headers } = await this.tableData(table);
     await this.sheets.spreadsheets.values.append({ spreadsheetId: this.spreadsheetId, range: `'${table}'!A:${columnName(headers.length)}`, valueInputOption: "RAW", insertDataOption: "INSERT_ROWS", requestBody: { values: [headers.map((header) => data[header] ?? "")] } });
   }
 
@@ -116,7 +120,12 @@ export class GoogleSheetsRepository implements Repository {
 
 function columnName(count: number) { let value = count; let result = ""; while (value) { value--; result = String.fromCharCode(65 + value % 26) + result; value = Math.floor(value / 26); } return result; }
 function mapKeys(value: object): Row { return Object.fromEntries(Object.entries(value).map(([key, item]) => [key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`), enc(item)])); }
-function farmerFromRow(r: Row): Farmer { return { farmerId: r.farmer_id!, memberCode: r.member_code!, displayName: r.display_name!, ...(r.line_user_id ? { lineUserId: r.line_user_id } : {}), status: r.status === "INACTIVE" ? "INACTIVE" : "ACTIVE" }; }
+function farmerFromRow(r: Row): Farmer {
+  const legacyLineValue = r.line_user_id ?? "";
+  const memberCode = r.member_code || (!legacyLineValue.startsWith("U") ? legacyLineValue : "");
+  const lineUserId = legacyLineValue.startsWith("U") ? legacyLineValue : (r.plots?.startsWith("U") ? r.plots : "");
+  return { farmerId:r.farmer_id!, memberCode, displayName:r.display_name || r.full_name || "ไม่ระบุชื่อ", ...(lineUserId ? { lineUserId } : {}), status:r.status === "INACTIVE" ? "INACTIVE" : "ACTIVE" };
+}
 function plotFromRow(r: Row): Plot { return { plotId: r.plot_id!, farmerId: r.farmer_id!, name: r.name!, crop: r.crop!, status: r.status === "INACTIVE" ? "INACTIVE" : "ACTIVE" }; }
 function activityFromRow(r: Row): Activity { return { activityId:r.activity_id!,sourceEventId:r.source_event_id!,farmerId:r.farmer_id!,farmerName:r.farmer_name!,...(r.plot_id?{plotId:r.plot_id}:{}),...(r.plot_name?{plotName:r.plot_name}:{}),...(r.crop?{crop:r.crop}:{}),occurredAt:r.occurred_at!,receivedAt:r.received_at!,...(r.transcript?{transcript:r.transcript}:{}),...(r.audio_content_id?{audioContentId:r.audio_content_id}:{}),...(r.activity_type?{activityType:r.activity_type}:{}),...(r.inputs_used?{inputsUsed:r.inputs_used}:{}),...(num(r.harvest_amount!)!==undefined?{harvestAmount:num(r.harvest_amount!)!}:{}),...(r.harvest_unit?{harvestUnit:r.harvest_unit}:{}),processingStatus:r.processing_status as Activity["processingStatus"],riskStatus:r.risk_status as Activity["riskStatus"],confidence:Number(r.confidence||0),flagReasons:json(r.flag_reasons!,[]),matchedTerms:json(r.matched_terms!,[]),...(r.created_lot_id?{createdLotId:r.created_lot_id}:{}),updatedAt:r.updated_at! }; }
 function activityToRow(x: Activity) { return mapKeys(x); }

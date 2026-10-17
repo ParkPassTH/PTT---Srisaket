@@ -2,6 +2,12 @@ import { z } from "zod";
 import type { AppConfig } from "../config.js";
 import type { ExtractedActivity } from "../domain/types.js";
 
+const confidenceValue = z.preprocess((value) => {
+  if (typeof value !== "number") return value;
+  if (value > 1 && value <= 100) return value / 100;
+  return Math.max(0, Math.min(1, value));
+}, z.number().min(0).max(1)).nullable();
+
 const outputSchema = z.object({
   transcript: z.string().min(1),
   plotId: z.string().nullable(),
@@ -13,12 +19,12 @@ const outputSchema = z.object({
   harvestUnit: z.string().nullable(),
   isHarvesting: z.boolean(),
   fieldConfidence: z.object({
-    plotId: z.number().min(0).max(1).nullable(),
-    crop: z.number().min(0).max(1).nullable(),
-    activityType: z.number().min(0).max(1).nullable(),
-    inputsUsed: z.number().min(0).max(1).nullable(),
-    harvestAmount: z.number().min(0).max(1).nullable(),
-    harvestUnit: z.number().min(0).max(1).nullable()
+    plotId: confidenceValue,
+    crop: confidenceValue,
+    activityType: confidenceValue,
+    inputsUsed: confidenceValue,
+    harvestAmount: confidenceValue,
+    harvestUnit: confidenceValue
   })
 });
 
@@ -43,7 +49,7 @@ export class GeminiService implements VoiceAnalyzer {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [
-          { text: "ถอดเสียงภาษาไทยตามคำพูดจริง แล้วแยกข้อมูลกิจกรรมเกษตร ห้ามเดาข้อมูลที่ไม่ได้พูด ค่าไม่ทราบให้เป็น null ความมั่นใจแต่ละช่องเป็น 0 ถึง 1" },
+          { text: "ถอดเสียงภาษาไทยตามคำพูดจริง แล้วแยกข้อมูลกิจกรรมเกษตร ห้ามเดาข้อมูลที่ไม่ได้พูด ค่าไม่ทราบให้เป็น null ความมั่นใจแต่ละช่องต้องเป็นเลขทศนิยม 0 ถึง 1 เท่านั้น เช่น 0.85 ห้ามใช้เปอร์เซ็นต์ 85" },
           { inlineData: { mimeType, data: audio.toString("base64") } }
         ] }],
         generationConfig: {
@@ -59,7 +65,7 @@ export class GeminiService implements VoiceAnalyzer {
           }
         }
       }),
-      signal: AbortSignal.timeout(45_000)
+      signal: AbortSignal.timeout(52_000)
     });
     if (!response.ok) throw new Error(`Gemini API returned ${response.status}: ${(await response.text()).slice(0, 300)}`);
     const payload = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };

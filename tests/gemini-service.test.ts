@@ -10,7 +10,7 @@ describe("Gemini voice analyzer", () => {
     let requestBody: any;
     globalThis.fetch = async (_input, init) => {
       requestBody = JSON.parse(String(init?.body));
-      return new Response(JSON.stringify({ candidates:[{ content:{ parts:[{ text:JSON.stringify({ transcript:"รดน้ำแปลงเหนือ", plotId:null, plotName:"แปลงเหนือ", crop:null, activityType:"รดน้ำ", inputsUsed:null, harvestAmount:null, harvestUnit:null, isHarvesting:false, fieldConfidence:{ plotId:null, crop:null, activityType:0.94, inputsUsed:null, harvestAmount:null, harvestUnit:null } }) }] } }] }), { status:200 });
+      return new Response(JSON.stringify({ candidates:[{ content:{ parts:[{ text:JSON.stringify({ transcript:"รดน้ำแปลงเหนือ", plotId:null, plotName:"แปลงเหนือ", crop:null, activityType:"รดน้ำ", inputsUsed:null, harvestAmount:null, harvestUnit:null, isHarvesting:false, fieldConfidence:{ plotId:null, crop:null, activityType:94, inputsUsed:null, harvestAmount:null, harvestUnit:null } }) }] } }] }), { status:200 });
     };
     const result = await new GeminiService("test-key", "test-model").analyze(Buffer.from("audio"), "audio/mp4");
     const confidenceSchema = requestBody.generationConfig.responseSchema.properties.fieldConfidence;

@@ -220,3 +220,12 @@
 - เพิ่มคำสั่ง `ยืนยัน <Activity ID>` ผ่าน LINE และแจ้งขอข้อมูลเพิ่มกลับไปยัง LINE เมื่อมีบัญชีที่ผูกไว้
 - ลบข้อมูลล็อกอินตัวอย่างที่กรอกค้างไว้บนหน้า production
 - automated tests ผ่าน 17 รายการก่อนเพิ่ม QR และอยู่ระหว่าง final verification
+
+## 2026-10-18 — Google Sheets schema compatibility and Gemini normalization
+
+- ตรวจ Production log พบ Gemini ส่ง confidence เป็นเปอร์เซ็นต์ เช่น `94` แทนทศนิยม `0.94`; เพิ่ม normalization 0–100 เป็น 0–1 และกำชับ prompt
+- เพิ่ม Gemini timeout จาก 45 เป็น 52 วินาที หลังพบคำขอบางครั้งถูก abort ที่ 45 วินาที
+- ยืนยันจากภาพ Google Sheets ว่า workbook ใช้ headers รุ่นเดิม ซึ่งไม่ตรงกับ repository schema ปัจจุบัน
+- เปลี่ยน Sheets adapter ให้อ่าน header จริงตามชื่อ เพิ่มเฉพาะ canonical columns ที่ขาด และรักษาคอลัมน์/ข้อมูลเดิมโดยไม่ลบหรือเลื่อนข้อมูล
+- เพิ่ม legacy mapping สำหรับ `full_name`, member code ที่อยู่ใน `line_user_id` และ LINE user ID ที่อยู่ใน `plots`
+- typecheck, tests 17/17 และ production build ผ่าน
