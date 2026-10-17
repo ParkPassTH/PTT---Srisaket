@@ -178,3 +178,8 @@
 - แก้ conditional ESM/CJS export ของ Helmet ให้ Vercel และ local TypeScript มอง callable middleware ตรงกัน
 - pin TypeScript/Helmet ตาม lockfile เพื่อให้ build ทำซ้ำได้
 - สาเหตุจาก Vercel build รายงาน `TS2349` ที่ `src/app.ts`
+## 2026-10-18 — Vercel startup diagnostics
+
+- เพิ่ม startup fallback ที่รายงานชื่อ environment field ที่ผิดโดยไม่เปิดเผยค่า secret
+- เปลี่ยนกรณี configuration ผิดจาก `FUNCTION_INVOCATION_FAILED` เป็น JSON 503 ที่แก้ไขได้
+- ใช้เพื่อวินิจฉัย deployment `ptt-srisaket.vercel.app` ซึ่ง `/health` ตอบ 500 ก่อนเข้า Express route
