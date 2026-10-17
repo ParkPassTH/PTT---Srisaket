@@ -1,14 +1,10 @@
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
-import { MemoryRepository } from "./repositories/memory-repository.js";
+import { createRepository } from "./repositories/create-repository.js";
 
 const config = loadConfig();
 
-if (config.DATA_DRIVER !== "memory") {
-  throw new Error("Google Sheets adapter is not wired yet. Use DATA_DRIVER=memory during foundation milestone.");
-}
-
-const repository = new MemoryRepository();
+const repository = createRepository(config);
 const app = createApp({ config, repository });
 
 app.listen(config.PORT, () => {

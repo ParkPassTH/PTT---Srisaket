@@ -8,6 +8,7 @@ import type { AppConfig } from "./config.js";
 import type { Repository } from "./repositories/repository.js";
 import { AuthService } from "./services/auth-service.js";
 import { LineService } from "./services/line-service.js";
+import { createVoiceAnalyzer } from "./services/gemini-service.js";
 import { ReviewService } from "./services/review-service.js";
 import { HttpError } from "./lib/http-error.js";
 
@@ -28,7 +29,7 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
   const app = express();
   const auth = new AuthService(config);
   const reviewService = new ReviewService(repository);
-  const lineService = new LineService(config, repository);
+  const lineService = new LineService(config, repository, createVoiceAnalyzer(config));
   const publicDirectory = fileURLToPath(new URL("../public", import.meta.url));
 
   app.set("trust proxy", 1);

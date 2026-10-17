@@ -1,6 +1,21 @@
 # คู่มือต่อระบบภายนอกและทดสอบระดับถัดไป
 
-อัปเดต: 17 ตุลาคม 2569
+อัปเดต: 18 ตุลาคม 2569
+
+## สถานะหลัง Implement Gate A–C
+
+Gate A–C มีโค้ดพร้อมแล้ว: Google Sheets เป็น persistent repository, LINE เชื่อมบัญชี/ดาวน์โหลดเสียง/ตอบกลับ และ Gemini ถอดเสียงพร้อมแยกข้อมูลแบบ structured output ระบบสร้าง worksheet และ header ที่ขาดให้อัตโนมัติ แต่ต้องมีแถวเกษตรกรอย่างน้อยหนึ่งแถวก่อนทดสอบ
+
+### ทดสอบจริงแบบสั้นที่สุด
+
+1. ตั้ง Vercel Environment: `DATA_DRIVER=google-sheets`, Google credentials, LINE credentials, `AI_PROVIDER=gemini`, `GEMINI_API_KEY` และ `GEMINI_MODEL=gemini-3.8-flash`
+2. Share Google Sheet ให้ service-account email เป็น Editor แล้ว Redeploy
+3. เปิด Dashboard หนึ่งครั้งหรือเรียก API เพื่อให้ระบบสร้างแท็บ แล้วเติมแถวใน `Farmers`: `F-001 | M001 | ชื่อผู้ทดสอบ | (เว้นว่าง) | ACTIVE`
+4. ใน LINE ส่ง `ลงทะเบียน M001` ต้องได้รับข้อความว่าเชื่อมบัญชีสำเร็จ และ `line_user_id` จะถูกเขียนลงชีต
+5. ส่ง Voice Message เช่น “วันนี้ใส่ปุ๋ยคอกสองกระสอบ ที่แปลง P-001 ปลูกถั่วเหลือง”
+6. ตรวจข้อความตอบกลับ และตรวจแถวใหม่ใน `Activities` โดยสถานะควรเป็น `NEEDS_CONFIRMATION` หรือ `NEEDS_REVIEW`
+
+หากไม่ตอบ ให้ดู Vercel Function Logs ด้วย code `VOICE_PROCESSING_FAILED`; ห้ามนำ key หรือ private key ไปวางใน Issue/แชตสาธารณะ
 
 ## สถานะจริงตอนนี้
 
@@ -94,7 +109,7 @@ GOOGLE_PRIVATE_KEY=
 
 | ค่า | เอามาจากไหน | ตัวอย่าง/ข้อควรระวัง |
 |---|---|---|
-| `DATA_DRIVER` | เรากำหนดเองใน `.env` หรือ Environment ของ hosting | ตอนนี้ใช้ `memory`; หลังสร้าง adapter เสร็จจึงเปลี่ยนเป็น `sheets` |
+| `DATA_DRIVER` | เรากำหนดเองใน `.env` หรือ Environment ของ hosting | ใช้ `google-sheets` สำหรับระบบจริง หรือ `memory` สำหรับ demo |
 | `GOOGLE_SHEET_ID` | เปิด Google Sheet แล้วคัดลอกข้อความระหว่าง `/d/` และ `/edit` ใน URL | URL `https://docs.google.com/spreadsheets/d/1AbC_xyz/edit` ⇒ ID คือ `1AbC_xyz` |
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Google Cloud Console → IAM & Admin → Service Accounts → ค่า Email | รูปแบบ `ptt-ics-staging@PROJECT_ID.iam.gserviceaccount.com`; นำ email นี้ไป Share ชีตเป็น Editor |
 | `GOOGLE_PRIVATE_KEY` | ไฟล์ JSON ที่ดาวน์โหลดจาก Service Account → Keys → Add key → Create new key → JSON → field `private_key` | ต้องเอาทั้ง `BEGIN PRIVATE KEY` และ `END PRIVATE KEY`; ห้ามส่งในแชตหรือ commit |
@@ -127,7 +142,7 @@ GOOGLE_PRIVATE_KEY=
 7. สร้าง Google Sheet → เปลี่ยนชื่อ worksheet ตามตาราง → กด Share
 8. วาง `client_email` เป็นผู้รับ เลือก Editor แล้วส่งคำเชิญ
 9. คัดลอก `GOOGLE_SHEET_ID` จาก URL
-10. ตั้ง `DATA_DRIVER=memory` ไว้ก่อน จนกว่า `GoogleSheetsRepository` และ tests จะเสร็จ จากนั้นจึงเปลี่ยนเป็น `sheets`
+10. ตั้ง `DATA_DRIVER=google-sheets` แล้ว redeploy; ระบบจะสร้างแท็บและ header ที่ขาดให้อัตโนมัติ
 
 > การให้ IAM role ใน Google Cloud ไม่ได้ทำให้ service account เปิด Google Sheet ได้เอง ต้อง Share ไฟล์ Sheet ให้ service-account email โดยตรง
 

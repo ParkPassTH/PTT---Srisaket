@@ -166,6 +166,15 @@ export class MemoryRepository implements Repository {
     return item ? structuredClone(item) : undefined;
   }
 
+  async getFarmerByMemberCode(memberCode: string) {
+    const item = [...this.farmers.values()].find((farmer) => farmer.memberCode.toLowerCase() === memberCode.toLowerCase());
+    return item ? structuredClone(item) : undefined;
+  }
+
+  async saveFarmer(farmer: Farmer) {
+    this.farmers.set(farmer.farmerId, structuredClone(farmer));
+  }
+
   async saveAuditEvent(event: AuditEvent) {
     this.auditEvents.push(structuredClone(event));
   }

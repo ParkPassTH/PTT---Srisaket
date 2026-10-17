@@ -51,7 +51,7 @@ npm audit --omit=dev
 |---|---|---|
 | `NODE_ENV` | ใช่ | `production` บน hosting |
 | `APP_BASE_URL` | ใช่ | URL จริง เช่น `https://example.onrender.com` |
-| `DATA_DRIVER` | ใช่ | ขณะนี้ใช้ `memory` สำหรับ foundation; production ต้องใช้ durable adapter |
+| `DATA_DRIVER` | ใช่ | ใช้ `google-sheets` สำหรับ production/pilot; `memory` สำหรับ demo เท่านั้น |
 | `SESSION_SECRET` | ใช่ | random อย่างน้อย 32 ตัวอักษร |
 | `ADMIN_EMAIL` | ใช่ | อีเมล admin เริ่มต้น |
 | `ADMIN_PASSWORD` | ใช่ | รหัสยาวและไม่ซ้ำบริการอื่น |
@@ -82,9 +82,9 @@ https://YOUR_DOMAIN/webhooks/line
 1. สร้าง Google Cloud project และเปิด Google Sheets API
 2. สร้าง service account สำหรับระบบนี้โดยเฉพาะ
 3. แชร์ spreadsheet ให้ service account เท่าที่จำเป็น
-4. เตรียม sheets: `Farmers`, `Log_Activity`, `Inventory_Lot`, `Reviews`, `Audit_Log`
+4. Share spreadsheet ให้ service account เป็น Editor; ระบบจะสร้าง `Farmers`, `Activities`, `Reviews`, `Lots`, `AuditEvents` และ headers ให้อัตโนมัติ
 5. ใส่ credentials ใน environment variables ไม่อัปโหลดไฟล์ key เข้า repository
-6. เปลี่ยน `DATA_DRIVER=google-sheets` หลัง adapter และ migration verification ผ่านเท่านั้น
+6. ตั้ง `DATA_DRIVER=google-sheets` และตรวจการสร้างแท็บหลัง deploy
 
 ## 7. ตั้งค่า OpenAI
 
@@ -125,5 +125,4 @@ Webhook URL คือ:
 https://YOUR-VERCEL-DOMAIN/webhooks/line
 ```
 
-Vercel preview ปัจจุบันใช้ `MemoryRepository`: เหมาะกับการ Verify webhook และทดสอบ signature/รับ event เท่านั้น ข้อมูลอาจหายเมื่อ function ถูกสร้างใหม่ และ pipeline ยังไม่ดาวน์โหลดเสียง จนกว่าจะทำ Gate A–C เสร็จ
-
+Vercel Function รองรับ Gate A–C แล้ว ตั้ง `maxDuration=60`; ต้องใช้ `DATA_DRIVER=google-sheets` เพื่อให้ข้อมูลคงอยู่ข้ามการสร้าง function ใหม่

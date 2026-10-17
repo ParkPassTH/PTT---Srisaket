@@ -30,7 +30,7 @@
 - [x] T-102 สร้าง project scaffold และ workspace scripts
 - [x] T-103 สร้าง environment schema และ `.env.example` — F-028
 - [x] T-104 สร้าง domain entities และ repository contracts — F-023
-- [ ] T-105 สร้าง Google Sheets adapter — F-023
+- [x] T-105 สร้าง Google Sheets adapter — F-023
 - [x] T-105A จัดทำคู่มือต่อ Sheets/LINE/OpenAI และ acceptance tests — F-023, F-029, F-030
 - [x] T-106 สร้าง error model และ structured logging — F-025, F-026
 - [-] T-107 สร้าง authentication/session และ RBAC — local session พร้อม รอ durable user store
@@ -38,13 +38,13 @@
 
 ## Phase 2 — LINE และ Voice Pipeline
 
-- [-] T-201 LINE webhook + signature tests — handler พร้อม รอ signed fixture
-- [-] T-202 idempotency store — repository check พร้อม รอ durable adapter
-- [ ] T-203 farmer account linking — F-003
-- [ ] T-204 audio download/validation — F-004
-- [ ] T-205 speech-to-text adapter — F-005
-- [ ] T-205A AI provider contracts และ Gemini adapters — F-005A
-- [ ] T-206 structured extraction + schema validation — F-006
+- [x] T-201 LINE webhook + signature tests — handler และ signed pipeline tests
+- [x] T-202 idempotency store — source event lookup บน Google Sheets
+- [x] T-203 farmer account linking — F-003
+- [x] T-204 audio download/validation — F-004
+- [x] T-205 speech-to-text adapter — F-005 (Gemini)
+- [x] T-205A AI provider contract และ Gemini adapter — F-005A (OpenAI adapter ยังไม่รวม)
+- [x] T-206 structured extraction + schema validation — F-006
 - [-] T-207 deterministic ICS rule engine + test fixtures — engine พร้อม รอ approved rules
 - [ ] T-208 confirmation and correction conversation — F-008
 - [ ] T-209 Flex Message templates + accessible wording — F-009
@@ -85,7 +85,7 @@
 ## Phase 6 — Verification และ Handover
 
 - [x] T-601 unit tests for rules/domain
-- [-] T-602 integration tests for LINE/OpenAI/Sheets adapters — API tests พร้อม รอ external adapters
+- [-] T-602 integration tests for LINE/Gemini/Sheets adapters — LINE pipeline ผ่าน mock integration; รอ credential smoke test จริง
 - [-] T-603 end-to-end critical paths — login/dashboard/review visual flow ผ่าน
 - [ ] T-604 security review
 - [ ] T-605 accessibility audit

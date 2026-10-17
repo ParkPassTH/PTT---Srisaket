@@ -2,96 +2,86 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Repository } from "../repositories/repository.js";
 import type { AppConfig } from "../config.js";
 import { HttpError } from "../lib/http-error.js";
+import { evaluateIcsRisk } from "../domain/ics-rules.js";
+import type { VoiceAnalyzer } from "./gemini-service.js";
 
-interface LineAudioEvent {
-  type: "message";
-  webhookEventId?: string;
-  timestamp: number;
-  source: { type: string; userId?: string };
-  message: { type: "audio"; id: string; duration?: number };
-}
-
-interface LineWebhookBody {
-  events?: unknown[];
-}
+interface LineEvent { type: string; webhookEventId?: string; replyToken?: string; timestamp: number; source: { type: string; userId?: string }; message?: { type: string; id: string; text?: string; duration?: number; contentProvider?: { type: string } }; }
+interface LineWebhookBody { events?: unknown[]; }
 
 export function verifyLineSignature(rawBody: Buffer, signature: string | undefined, secret: string | undefined) {
   if (!secret) throw new HttpError(503, "LINE_NOT_CONFIGURED", "ยังไม่ได้ตั้งค่า LINE_CHANNEL_SECRET");
   if (!signature) return false;
   const expected = createHmac("sha256", secret).update(rawBody).digest("base64");
-  const actualBuffer = Buffer.from(signature);
-  const expectedBuffer = Buffer.from(expected);
+  const actualBuffer = Buffer.from(signature); const expectedBuffer = Buffer.from(expected);
   return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
-function isAudioEvent(event: unknown): event is LineAudioEvent {
-  if (!event || typeof event !== "object") return false;
-  const candidate = event as Partial<LineAudioEvent>;
-  return candidate.type === "message" && candidate.message?.type === "audio";
-}
+function isMessageEvent(value: unknown): value is LineEvent { const x = value as LineEvent; return !!x && typeof x === "object" && x.type === "message" && !!x.message; }
 
 export class LineService {
-  constructor(
-    private readonly config: AppConfig,
-    private readonly repository: Repository
-  ) {}
+  constructor(private readonly config: AppConfig, private readonly repository: Repository, private readonly analyzer?: VoiceAnalyzer) {}
 
   async acceptWebhook(rawBody: Buffer, signature?: string) {
-    if (!verifyLineSignature(rawBody, signature, this.config.LINE_CHANNEL_SECRET)) {
-      throw new HttpError(401, "INVALID_LINE_SIGNATURE", "LINE webhook signature ไม่ถูกต้อง");
-    }
-
+    if (!verifyLineSignature(rawBody, signature, this.config.LINE_CHANNEL_SECRET)) throw new HttpError(401, "INVALID_LINE_SIGNATURE", "LINE webhook signature ไม่ถูกต้อง");
     let body: LineWebhookBody;
-    try {
-      body = JSON.parse(rawBody.toString("utf8")) as LineWebhookBody;
-    } catch {
-      throw new HttpError(400, "INVALID_JSON", "Webhook body ไม่ใช่ JSON ที่ถูกต้อง");
-    }
-
-    let accepted = 0;
-    let duplicates = 0;
-    let ignored = 0;
-
-    for (const event of body.events ?? []) {
-      if (!isAudioEvent(event)) {
-        ignored += 1;
-        continue;
-      }
+    try { body = JSON.parse(rawBody.toString("utf8")) as LineWebhookBody; } catch { throw new HttpError(400, "INVALID_JSON", "Webhook body ไม่ใช่ JSON ที่ถูกต้อง"); }
+    let accepted = 0, duplicates = 0, ignored = 0, failed = 0;
+    for (const unknownEvent of body.events ?? []) {
+      if (!isMessageEvent(unknownEvent)) { ignored++; continue; }
+      const event = unknownEvent;
+      if (event.message?.type === "text") { if (await this.handleRegistration(event)) accepted++; else ignored++; continue; }
+      if (event.message?.type !== "audio") { ignored++; continue; }
       const sourceEventId = event.webhookEventId ?? `line-${event.message.id}-${event.timestamp}`;
-      if (await this.repository.findActivityBySourceEvent(sourceEventId)) {
-        duplicates += 1;
-        continue;
-      }
-      const lineUserId = event.source.userId;
-      if (!lineUserId) {
-        ignored += 1;
-        continue;
-      }
-      const farmer = await this.repository.getFarmerByLineUserId(lineUserId);
-      if (!farmer) {
-        // Unlinked identities must enter a separate onboarding flow; never infer identity from display name.
-        ignored += 1;
-        continue;
-      }
+      if (await this.repository.findActivityBySourceEvent(sourceEventId)) { duplicates++; continue; }
+      const farmer = event.source.userId ? await this.repository.getFarmerByLineUserId(event.source.userId) : undefined;
+      if (!farmer) { await this.reply(event.replyToken, "ยังไม่พบการเชื่อมบัญชี กรุณาส่งข้อความ: ลงทะเบียน รหัสสมาชิก\nตัวอย่าง: ลงทะเบียน M001"); ignored++; continue; }
+      if (!this.analyzer) { await this.reply(event.replyToken, "ระบบถอดเสียงยังไม่พร้อม กรุณาตรวจ GEMINI_API_KEY และ AI_PROVIDER"); failed++; continue; }
       const now = new Date().toISOString();
-      await this.repository.saveActivity({
-        activityId: `ACT-${event.timestamp}-${event.message.id.slice(-6)}`,
-        sourceEventId,
-        farmerId: farmer.farmerId,
-        farmerName: farmer.displayName,
-        occurredAt: new Date(event.timestamp).toISOString(),
-        receivedAt: now,
-        audioContentId: event.message.id,
-        processingStatus: "RECEIVED",
-        riskStatus: "NEEDS_REVIEW",
-        confidence: 0,
-        flagReasons: [],
-        matchedTerms: [],
-        updatedAt: now
-      });
-      accepted += 1;
+      const activity = { activityId: `ACT-${event.timestamp}-${event.message.id.slice(-6)}`, sourceEventId, farmerId: farmer.farmerId, farmerName: farmer.displayName, occurredAt: new Date(event.timestamp).toISOString(), receivedAt: now, audioContentId: event.message.id, processingStatus: "PROCESSING" as const, riskStatus: "NEEDS_REVIEW" as const, confidence: 0, flagReasons: [] as string[], matchedTerms: [] as string[], updatedAt: now };
+      await this.repository.saveActivity(activity);
+      try {
+        const { audio, mimeType } = await this.downloadAudio(event.message.id);
+        const analysis = await this.analyzer.analyze(audio, mimeType);
+        const rule = evaluateIcsRisk(analysis.extracted, analysis.transcript);
+        const confidenceValues = Object.values(analysis.extracted.fieldConfidence);
+        const confidence = confidenceValues.length ? confidenceValues.reduce((a, b) => a + b, 0) / confidenceValues.length : 0;
+        const completed = { ...activity, transcript: analysis.transcript, ...analysis.extracted, ...(analysis.plotName ? { plotName: analysis.plotName } : {}), processingStatus: (rule.riskStatus === "PROVISIONALLY_CLEAR" ? "NEEDS_CONFIRMATION" : "NEEDS_REVIEW") as "NEEDS_CONFIRMATION" | "NEEDS_REVIEW", riskStatus: rule.riskStatus, confidence, flagReasons: rule.reasons, matchedTerms: rule.matchedTerms, updatedAt: new Date().toISOString() };
+        await this.repository.saveActivity(completed);
+        await this.reply(event.replyToken, this.summary(completed.activityId, analysis.transcript, rule.riskStatus));
+        accepted++;
+      } catch (error) {
+        await this.repository.saveActivity({ ...activity, processingStatus: "FAILED_RETRYABLE", flagReasons: [error instanceof Error ? error.message.slice(0, 300) : "Unknown processing error"], updatedAt: new Date().toISOString() });
+        await this.reply(event.replyToken, "รับไฟล์เสียงแล้ว แต่ประมวลผลไม่สำเร็จ เจ้าหน้าที่สามารถตรวจและลองใหม่ได้").catch(() => undefined);
+        console.error(JSON.stringify({ level: "error", code: "VOICE_PROCESSING_FAILED", activityId: activity.activityId, message: error instanceof Error ? error.message : String(error) })); failed++;
+      }
     }
-
-    return { accepted, duplicates, ignored };
+    return { accepted, duplicates, ignored, failed };
   }
+
+  private async handleRegistration(event: LineEvent) {
+    const match = event.message?.text?.trim().match(/^ลงทะเบียน\s+([A-Za-z0-9_-]+)$/i);
+    if (!match || !event.source.userId) return false;
+    const farmer = await this.repository.getFarmerByMemberCode(match[1]!);
+    if (!farmer) { await this.reply(event.replyToken, "ไม่พบรหัสสมาชิกนี้ กรุณาติดต่อเจ้าหน้าที่ให้เพิ่มข้อมูลในชีต Farmers"); return true; }
+    await this.repository.saveFarmer({ ...farmer, lineUserId: event.source.userId });
+    await this.reply(event.replyToken, `เชื่อมบัญชีสำเร็จ: ${farmer.displayName}\nส่งข้อความเสียงกิจกรรมการเกษตรได้เลย`);
+    return true;
+  }
+
+  private async downloadAudio(messageId: string) {
+    if (!this.config.LINE_CHANNEL_ACCESS_TOKEN) throw new Error("LINE_CHANNEL_ACCESS_TOKEN is not configured");
+    const response = await fetch(`https://api-data.line.me/v2/bot/message/${encodeURIComponent(messageId)}/content`, { headers: { Authorization: `Bearer ${this.config.LINE_CHANNEL_ACCESS_TOKEN}` }, signal: AbortSignal.timeout(15_000) });
+    if (!response.ok) throw new Error(`LINE content API returned ${response.status}`);
+    const audio = Buffer.from(await response.arrayBuffer());
+    if (!audio.length) throw new Error("LINE returned empty audio");
+    return { audio, mimeType: response.headers.get("content-type")?.split(";")[0] ?? "audio/mp4" };
+  }
+
+  private async reply(replyToken: string | undefined, text: string) {
+    if (!replyToken || !this.config.LINE_CHANNEL_ACCESS_TOKEN) return;
+    const response = await fetch("https://api.line.me/v2/bot/message/reply", { method: "POST", headers: { Authorization: `Bearer ${this.config.LINE_CHANNEL_ACCESS_TOKEN}`, "Content-Type": "application/json" }, body: JSON.stringify({ replyToken, messages: [{ type: "text", text: text.slice(0, 5000) }] }), signal: AbortSignal.timeout(10_000) });
+    if (!response.ok) throw new Error(`LINE reply API returned ${response.status}: ${(await response.text()).slice(0, 200)}`);
+  }
+
+  private summary(id: string, transcript: string, risk: string) { const status = risk === "FLAGGED_HIGH" ? "พบประเด็นเสี่ยง รอเจ้าหน้าที่ตรวจ" : risk === "NEEDS_REVIEW" ? "ข้อมูลยังไม่ครบ รอเจ้าหน้าที่ตรวจ" : "บันทึกแล้ว รอยืนยัน"; return `รับและถอดเสียงสำเร็จ ✅\nเลขที่: ${id}\nข้อความ: ${transcript.slice(0, 700)}\nสถานะ: ${status}`; }
 }

@@ -186,3 +186,16 @@
 - Function Logs ยืนยันสาเหตุจริง: Express framework auto-detection เลือก `src/app.ts` แทน `api/index.ts`
 - ปิด framework preset ด้วย `framework: null` เพื่อให้ Vercel ใช้ function entrypoint ที่กำหนดไว้
 - เพิ่ม original-path forwarding สำหรับ `/health`, `/api/*` และ `/webhooks/*` เพราะ Vercel internal rewrite ส่ง destination path เข้า backend
+
+## 2026-10-18 — Implement Gate A–C
+
+- สร้าง `GoogleSheetsRepository` ตาม Repository contract พร้อมสร้าง worksheet/header อัตโนมัติและ upsert ข้อมูลหลัก
+- เพิ่ม LINE account linking ด้วยคำสั่ง `ลงทะเบียน <รหัสสมาชิก>` โดยจับคู่ `member_code`
+- เพิ่ม LINE Content API สำหรับดาวน์โหลดเสียง และ Reply API สำหรับแจ้งผล/ข้อผิดพลาด
+- เพิ่ม `VoiceAnalyzer` contract และ Gemini adapter ที่ถอดเสียงภาษาไทยพร้อม structured extraction ในคำขอเดียว
+- ตรวจ structured output ด้วย Zod แล้วใช้ deterministic ICS rules ตัดสินสถานะ; AI ไม่เป็นผู้อนุมัติ ICS
+- บันทึก lifecycle `PROCESSING` → `NEEDS_CONFIRMATION`/`NEEDS_REVIEW` หรือ `FAILED_RETRYABLE` ลง Activities
+- เพิ่ม signed integration tests สำหรับ registration และ voice pipeline; test รวมผ่าน 12/12, typecheck/build ผ่าน
+- ล้าง secret ออกจาก `.env.example` ในเครื่อง โดยไม่แก้ `.env.local`
+- เพิ่ม Vercel function duration เป็น 60 วินาทีสำหรับ audio pipeline
+- credential smoke test ในเครื่องยังรันจริงไม่ได้ เพราะ `.env.local` มีเฉพาะ `VERCEL_OIDC_TOKEN`; `vercel env ls` ไม่พบ project variables จึงต้องตั้งค่าใน Vercel ก่อนทดสอบภายนอก

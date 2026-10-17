@@ -20,11 +20,11 @@
 |---|---|---|---|---|
 | F-001 | ตรวจสอบ LINE webhook signature | ระบบ | In Progress | signature ผิดถูกปฏิเสธ และมี automated test |
 | F-002 | ป้องกัน webhook/event ซ้ำ | ระบบ | In Progress | event เดิมไม่สร้าง activity หรือล็อตซ้ำ |
-| F-003 | ผูก LINE account กับ Farmer ID | เกษตรกร/Admin | Planned | ไม่ใช้ display name เป็น primary identity |
-| F-004 | รับและดาวน์โหลดข้อความเสียง | เกษตรกร | Planned | รองรับชนิดไฟล์ที่ LINE ส่งและจำกัดขนาด/เวลา |
-| F-005 | ถอดเสียงภาษาไทย | ระบบ | Planned | เก็บ transcript และสถานะ error โดยไม่ทำ token รั่ว |
-| F-005A | AI provider abstraction (OpenAI/Gemini) | ระบบ/Developer | Planned | เลือก provider ผ่าน config และผ่าน contract tests ชุดเดียวกัน โดยไม่เปลี่ยน domain/ICS rules |
-| F-006 | สกัดข้อมูลกิจกรรมตาม schema | ระบบ | Planned | output ผ่าน validation; invalid output เข้าคิวตรวจ |
+| F-003 | ผูก LINE account กับ Farmer ID | เกษตรกร/Admin | Implemented | ส่ง `ลงทะเบียน <รหัสสมาชิก>`; ไม่ใช้ display name เป็น identity |
+| F-004 | รับและดาวน์โหลดข้อความเสียง | เกษตรกร | Implemented | LINE Content API, timeout และขนาด inline ไม่เกิน 18 MB |
+| F-005 | ถอดเสียงภาษาไทย | ระบบ | Implemented | Gemini multimodal; เก็บ transcript และ error โดยไม่เปิดเผย token |
+| F-005A | AI provider abstraction (OpenAI/Gemini) | ระบบ/Developer | Partial | มี VoiceAnalyzer contract และ Gemini adapter; OpenAI adapter ยังไม่เชื่อม |
+| F-006 | สกัดข้อมูลกิจกรรมตาม schema | ระบบ | Implemented | Gemini structured JSON + Zod validation; invalid output เป็น FAILED_RETRYABLE |
 | F-007 | ICS deterministic rule engine | ICS | In Progress | engine และ tests พร้อม; รอรายการสารฉบับอนุมัติ |
 | F-008 | Farmer confirmation ผ่าน LINE | เกษตรกร | Planned | ยืนยัน แก้ หรือขอความช่วยเหลือได้ |
 | F-009 | Flex Message ผลสำเร็จ/ต้องตรวจ/ผิดพลาด | เกษตรกร | Planned | ภาษาไทยชัดเจน ไม่กล่าวโทษ และไม่พึ่งสีอย่างเดียว |
@@ -41,7 +41,7 @@
 | F-020 | Inventory status workflow | Warehouse | Planned | transition ตามกฎและเก็บเหตุผล/ผู้ดำเนินการ |
 | F-021 | Public trace page | ผู้ตรวจสอบ | In Progress | privacy-safe API พร้อม; รอหน้า UI และ invalid/void states |
 | F-022 | Audit trail | Auditor/Admin | In Progress | review audit พร้อม; รอครอบคลุมทุก entity |
-| F-023 | Google Sheets repository adapter | ระบบ | Planned | domain service ไม่ import Sheets SDK โดยตรง |
+| F-023 | Google Sheets repository adapter | ระบบ | Implemented | สร้าง headers อัตโนมัติและอ่าน/เขียนผ่าน Repository contract |
 | F-024 | Retry, outbox และ dead-letter handling | ระบบ/Admin | Planned | งานชั่วคราว retry; งานเกินกำหนดกู้จาก Dashboard ได้ |
 | F-025 | Health check และ structured logs | Admin | In Progress | API health/log พร้อม; รอ dependency/worker health |
 | F-026 | Validation และ error handling | ทุกคน | Done | error ให้ next step และ API ใช้รูปแบบคงที่ |
@@ -89,5 +89,6 @@
 | 17 ต.ค. 2569 | สร้างทะเบียนฟีเจอร์เริ่มต้น F-001 ถึง F-205 | แปลง comprehensive brief ให้เป็น scope ที่ตรวจสอบและพัฒนาได้ | Codex |
 | 17 ต.ค. 2569 | เพิ่ม human review, audit, retry, idempotency, RBAC และ privacy | จำเป็นต่อความน่าเชื่อถือและ production readiness | Codex |
 | 17 ต.ค. 2569 | เริ่ม foundation implementation และอัปเดตสถานะ F-001–F-030 ตามหลักฐานจริง | Dashboard/API/test milestone แรกพร้อม แต่ integration ภายนอกยังไม่ครบ | Codex |
+| 18 ต.ค. 2569 | Implement Gate A–C: Google Sheets, LINE linking/audio และ Gemini pipeline | พร้อม deploy และทดสอบด้วย credentials จริง; OpenAI adapter/outbox ยังอยู่นอกขอบเขตรอบนี้ | Codex |
 | 17 ต.ค. 2569 | เพิ่มคู่มือ integration แบบแบ่ง Gate A–D โดยไม่เปลี่ยนขอบเขตฟีเจอร์ | ทำให้แยกสถานะ memory demo ออกจาก Sheets/LINE/OpenAI จริงและทดสอบระดับถัดไปได้ | Codex |
 | 18 ต.ค. 2569 | เพิ่ม Gemini เป็นทางเลือก Gate C ผ่าน provider abstraction | ลด vendor lock-in; Gemini รองรับ audio transcription และ structured output แต่ยังไม่ implement adapter | Codex |

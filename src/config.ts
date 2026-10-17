@@ -11,9 +11,12 @@ const envSchema = z.object({
   ADMIN_PASSWORD: z.string().min(8).default("change-this-before-deploy"),
   LINE_CHANNEL_SECRET: z.string().optional(),
   LINE_CHANNEL_ACCESS_TOKEN: z.string().optional(),
+  AI_PROVIDER: z.enum(["gemini", "openai"]).default("gemini"),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_TRANSCRIPTION_MODEL: z.string().default("gpt-4o-mini-transcribe"),
   OPENAI_EXTRACTION_MODEL: z.string().default("gpt-4o-mini"),
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default("gemini-3.8-flash"),
   GOOGLE_SHEET_ID: z.string().optional(),
   GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string().email().optional(),
   GOOGLE_PRIVATE_KEY: z.string().optional(),
@@ -31,6 +34,11 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env) {
     }
     if (parsed.ADMIN_PASSWORD === "change-this-before-deploy") {
       throw new Error("ADMIN_PASSWORD must be changed in production");
+    }
+  }
+  if (parsed.DATA_DRIVER === "google-sheets") {
+    for (const key of ["GOOGLE_SHEET_ID", "GOOGLE_SERVICE_ACCOUNT_EMAIL", "GOOGLE_PRIVATE_KEY"] as const) {
+      if (!parsed[key]) throw new Error(`${key} is required when DATA_DRIVER=google-sheets`);
     }
   }
   return {

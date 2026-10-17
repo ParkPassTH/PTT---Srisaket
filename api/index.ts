@@ -1,6 +1,6 @@
 import { createApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
-import { MemoryRepository } from "../src/repositories/memory-repository.js";
+import { createRepository } from "../src/repositories/create-repository.js";
 import express, { type Application } from "express";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
@@ -13,7 +13,9 @@ function describeStartupError(error: unknown) {
   if (error instanceof Error && [
     "SESSION_SECRET must be changed in production",
     "ADMIN_PASSWORD must be changed in production",
-    "Google Sheets adapter is not wired yet. Use DATA_DRIVER=memory for the current Vercel preview."
+    "GOOGLE_SHEET_ID is required when DATA_DRIVER=google-sheets",
+    "GOOGLE_SERVICE_ACCOUNT_EMAIL is required when DATA_DRIVER=google-sheets",
+    "GOOGLE_PRIVATE_KEY is required when DATA_DRIVER=google-sheets"
   ].includes(error.message)) return error.message;
   return "Application startup failed. Check Vercel Function logs.";
 }
@@ -22,13 +24,7 @@ let app: Application;
 
 try {
   const config = loadConfig();
-  if (config.DATA_DRIVER !== "memory") {
-    throw new Error("Google Sheets adapter is not wired yet. Use DATA_DRIVER=memory for the current Vercel preview.");
-  }
-
-  // This repository survives only while the serverless instance stays warm.
-  // Gate A will replace it with persistent Google Sheets storage.
-  app = createApp({ config, repository: new MemoryRepository() });
+  app = createApp({ config, repository: createRepository(config) });
 } catch (error) {
   const message = describeStartupError(error);
   console.error(JSON.stringify({ level: "error", code: "STARTUP_CONFIGURATION_ERROR", message }));

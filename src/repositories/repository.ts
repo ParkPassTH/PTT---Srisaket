@@ -25,6 +25,8 @@ export interface Repository {
   getLotByTraceToken(traceToken: string): Promise<Lot | undefined>;
   saveLot(lot: Lot): Promise<void>;
   getFarmerByLineUserId(lineUserId: string): Promise<Farmer | undefined>;
+  getFarmerByMemberCode(memberCode: string): Promise<Farmer | undefined>;
+  saveFarmer(farmer: Farmer): Promise<void>;
   saveAuditEvent(event: AuditEvent): Promise<void>;
   listAuditEvents(entityId: string): Promise<AuditEvent[]>;
 }
