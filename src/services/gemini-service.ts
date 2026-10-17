@@ -12,7 +12,14 @@ const outputSchema = z.object({
   harvestAmount: z.number().nonnegative().nullable(),
   harvestUnit: z.string().nullable(),
   isHarvesting: z.boolean(),
-  fieldConfidence: z.record(z.string(), z.number().min(0).max(1))
+  fieldConfidence: z.object({
+    plotId: z.number().min(0).max(1).nullable(),
+    crop: z.number().min(0).max(1).nullable(),
+    activityType: z.number().min(0).max(1).nullable(),
+    inputsUsed: z.number().min(0).max(1).nullable(),
+    harvestAmount: z.number().min(0).max(1).nullable(),
+    harvestUnit: z.number().min(0).max(1).nullable()
+  })
 });
 
 export interface VoiceAnalysis {
@@ -46,7 +53,8 @@ export class GeminiService implements VoiceAnalyzer {
             type: "OBJECT",
             required: ["transcript", "plotId", "plotName", "crop", "activityType", "inputsUsed", "harvestAmount", "harvestUnit", "isHarvesting", "fieldConfidence"],
             properties: {
-              transcript: { type: "STRING" }, plotId: { type: "STRING", nullable: true }, plotName: { type: "STRING", nullable: true }, crop: { type: "STRING", nullable: true }, activityType: { type: "STRING", nullable: true }, inputsUsed: { type: "STRING", nullable: true }, harvestAmount: { type: "NUMBER", nullable: true }, harvestUnit: { type: "STRING", nullable: true }, isHarvesting: { type: "BOOLEAN" }, fieldConfidence: { type: "OBJECT", additionalProperties: { type: "NUMBER" } }
+              transcript: { type: "STRING" }, plotId: { type: "STRING", nullable: true }, plotName: { type: "STRING", nullable: true }, crop: { type: "STRING", nullable: true }, activityType: { type: "STRING", nullable: true }, inputsUsed: { type: "STRING", nullable: true }, harvestAmount: { type: "NUMBER", nullable: true }, harvestUnit: { type: "STRING", nullable: true }, isHarvesting: { type: "BOOLEAN" },
+              fieldConfidence: { type: "OBJECT", required: ["plotId", "crop", "activityType", "inputsUsed", "harvestAmount", "harvestUnit"], properties: { plotId: { type: "NUMBER", nullable: true }, crop: { type: "NUMBER", nullable: true }, activityType: { type: "NUMBER", nullable: true }, inputsUsed: { type: "NUMBER", nullable: true }, harvestAmount: { type: "NUMBER", nullable: true }, harvestUnit: { type: "NUMBER", nullable: true } } }
             }
           }
         }
@@ -61,7 +69,7 @@ export class GeminiService implements VoiceAnalyzer {
       transcript: parsed.transcript,
       ...(parsed.plotName ? { plotName: parsed.plotName } : {}),
       extracted: {
-        ...(parsed.plotId ? { plotId: parsed.plotId } : {}), ...(parsed.crop ? { crop: parsed.crop } : {}), ...(parsed.activityType ? { activityType: parsed.activityType } : {}), ...(parsed.inputsUsed ? { inputsUsed: parsed.inputsUsed } : {}), ...(parsed.harvestAmount !== null ? { harvestAmount: parsed.harvestAmount } : {}), ...(parsed.harvestUnit ? { harvestUnit: parsed.harvestUnit } : {}), isHarvesting: parsed.isHarvesting, fieldConfidence: parsed.fieldConfidence
+        ...(parsed.plotId ? { plotId: parsed.plotId } : {}), ...(parsed.crop ? { crop: parsed.crop } : {}), ...(parsed.activityType ? { activityType: parsed.activityType } : {}), ...(parsed.inputsUsed ? { inputsUsed: parsed.inputsUsed } : {}), ...(parsed.harvestAmount !== null ? { harvestAmount: parsed.harvestAmount } : {}), ...(parsed.harvestUnit ? { harvestUnit: parsed.harvestUnit } : {}), isHarvesting: parsed.isHarvesting, fieldConfidence: Object.fromEntries(Object.entries(parsed.fieldConfidence).filter((entry): entry is [string, number] => entry[1] !== null))
       }
     };
   }
