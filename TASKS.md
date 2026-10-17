@@ -1,0 +1,100 @@
+# Project Tasks
+
+> ทุก task ต้องอ้างอิง Feature ID เมื่อเกี่ยวข้อง และอัปเดตสถานะพร้อม `WORKLOG.md`
+>
+> อัปเดตล่าสุด: 17 ตุลาคม 2569
+
+## สถานะ
+
+- `[ ]` ยังไม่เริ่ม
+- `[-]` กำลังทำ
+- `[x]` เสร็จและตรวจแล้ว
+- `[!]` ติดปัญหา
+- `[~]` เลื่อนออกไป
+
+## Phase 0 — Discovery และข้อกำหนด
+
+- [x] T-001 อ่าน comprehensive brief
+- [x] T-002 ยืนยัน stack: Node.js + Express + custom Web Dashboard
+- [x] T-003 ยืนยันเป้าหมาย: production-ready และ deploy ได้
+- [x] T-004 สร้าง `PRODUCT.md`
+- [x] T-005 สร้าง system flow สำหรับนำเสนอ
+- [x] T-006 สร้างทะเบียนฟีเจอร์และขอบเขต
+- [x] T-007 เลือกทิศทาง UX/UI ตาม Impeccable — สมุดตรวจสหกรณ์
+- [ ] T-008 ยืนยันรายการสาร กฎ และผู้มีอำนาจอนุมัติ
+- [ ] T-009 ยืนยัน privacy/retention policy ของเสียงและข้อมูลเกษตรกร
+
+## Phase 1 — Architecture และ Foundation
+
+- [ ] T-101 สรุป architecture decision records
+- [x] T-102 สร้าง project scaffold และ workspace scripts
+- [x] T-103 สร้าง environment schema และ `.env.example` — F-028
+- [x] T-104 สร้าง domain entities และ repository contracts — F-023
+- [ ] T-105 สร้าง Google Sheets adapter — F-023
+- [x] T-105A จัดทำคู่มือต่อ Sheets/LINE/OpenAI และ acceptance tests — F-023, F-029, F-030
+- [x] T-106 สร้าง error model และ structured logging — F-025, F-026
+- [-] T-107 สร้าง authentication/session และ RBAC — local session พร้อม รอ durable user store
+- [-] T-108 ตั้งค่า unit/integration test และ CI — local suite พร้อม รอ hosted CI
+
+## Phase 2 — LINE และ Voice Pipeline
+
+- [-] T-201 LINE webhook + signature tests — handler พร้อม รอ signed fixture
+- [-] T-202 idempotency store — repository check พร้อม รอ durable adapter
+- [ ] T-203 farmer account linking — F-003
+- [ ] T-204 audio download/validation — F-004
+- [ ] T-205 speech-to-text adapter — F-005
+- [ ] T-205A AI provider contracts และ Gemini adapters — F-005A
+- [ ] T-206 structured extraction + schema validation — F-006
+- [-] T-207 deterministic ICS rule engine + test fixtures — engine พร้อม รอ approved rules
+- [ ] T-208 confirmation and correction conversation — F-008
+- [ ] T-209 Flex Message templates + accessible wording — F-009
+- [ ] T-210 retry/outbox/dead-letter workflow — F-024
+
+## Phase 3 — Dashboard
+
+- [x] T-301 สร้าง design tokens และ app shell — F-027
+- [x] T-302 login/session screens — F-010
+- [x] T-303 overview dashboard — F-012
+- [-] T-304 review queue/filter — risk/text พร้อม รอ filter ที่เหลือ
+- [-] T-305 review detail/evidence player — หลักฐานพร้อม รอ audio player
+- [-] T-306 review actions and audit — flow หลักพร้อม รอ void confirmation
+- [x] T-307 activity registry — F-016
+- [ ] T-308 farmer/plot registry — F-003, F-016
+- [-] T-309 responsive and accessibility verification — desktop/mobile captures พร้อม รอ formal audit
+
+## Phase 4 — Inventory และ Traceability
+
+- [ ] T-401 harvest eligibility service — F-017
+- [ ] T-402 unique Lot ID generator — F-018
+- [ ] T-403 QR/trace token service — F-019
+- [ ] T-404 inventory workflow — F-020
+- [ ] T-405 lot dashboard/detail — F-020
+- [ ] T-406 public trace page — F-021
+- [ ] T-407 recall/void scenarios — F-108
+
+## Phase 5 — Operations และ Deployment
+
+- [-] T-501 health/readiness endpoints — `/health` พร้อม รอ dependency readiness
+- [ ] T-502 backup/export/restore drill — F-031
+- [x] T-503 free-tier hosting selection and config — Render Blueprint พร้อม พร้อมระบุข้อจำกัด
+- [ ] T-504 CI deployment pipeline — F-029, F-030
+- [ ] T-505 LINE production webhook setup guide — F-030
+- [ ] T-506 monitoring, quota and cost alerts — F-025
+- [ ] T-507 rollback and incident runbook — F-030
+
+## Phase 6 — Verification และ Handover
+
+- [x] T-601 unit tests for rules/domain
+- [-] T-602 integration tests for LINE/OpenAI/Sheets adapters — API tests พร้อม รอ external adapters
+- [-] T-603 end-to-end critical paths — login/dashboard/review visual flow ผ่าน
+- [ ] T-604 security review
+- [ ] T-605 accessibility audit
+- [x] T-606 desktop/mobile visual QA
+- [ ] T-607 operator manual
+- [x] T-608 troubleshooting guide
+- [ ] T-609 deployment verification checklist
+- [ ] T-610 final feature/task reconciliation
+
+## Current Gate
+
+ต้องเลือกทิศทาง UX/UI ก่อนเริ่ม T-301 และงาน implementation ที่สร้างหน้าจอ โดยตัวเลือกที่รอยืนยันอยู่ใน `.impeccable/mocks/decision/`

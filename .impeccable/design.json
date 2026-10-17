@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-17T21:00:00+07:00",
+  "title": "Design System: ทะเบียน ICS — สมุดตรวจสหกรณ์",
+  "extensions": {
+    "colorMeta": {
+      "ink": { "role": "primary", "displayName": "หมึกทะเบียน", "canonical": "#17372a", "tonalRamp": ["#0b1d15", "#17372a", "#2e5041", "#4f705f", "#789382", "#a5b8aa", "#d2ddd3", "#edf2ec"] },
+      "ink-muted": { "role": "primary", "displayName": "หมึกใบไม้", "canonical": "#2e5041", "tonalRamp": ["#102319", "#203b2e", "#2e5041", "#526f61", "#789184", "#a1b2a8", "#ced9d2", "#edf2ef"] },
+      "paper": { "role": "neutral", "displayName": "กระดาษหลัก", "canonical": "#fbf8ef", "tonalRamp": ["#29271f", "#4a473c", "#6d695c", "#918c7e", "#b7b1a3", "#d9d4c8", "#eeeae0", "#fbf8ef"] },
+      "paper-muted": { "role": "neutral", "displayName": "กระดาษตาราง", "canonical": "#f2f1e8", "tonalRamp": ["#25251e", "#44443b", "#65645b", "#89887d", "#afaea3", "#d1d0c6", "#e4e3da", "#f2f1e8"] },
+      "paper-raised": { "role": "neutral", "displayName": "กระดาษยกชั้น", "canonical": "#fffdf7", "tonalRamp": ["#292823", "#4a4942", "#6c6a62", "#918f87", "#b8b5ad", "#dad8d1", "#efede7", "#fffdf7"] },
+      "line": { "role": "neutral", "displayName": "เส้นทะเบียน", "canonical": "#c9d2c5", "tonalRamp": ["#20251f", "#3d463c", "#5d675b", "#7f897d", "#a3ada0", "#c9d2c5", "#e2e8df", "#f1f5ef"] },
+      "line-soft": { "role": "neutral", "displayName": "เส้นทะเบียนอ่อน", "canonical": "#e2e5dc", "tonalRamp": ["#242622", "#444741", "#666962", "#898d85", "#afb2aa", "#d1d4cc", "#e2e5dc", "#f3f5ef"] },
+      "rust": { "role": "secondary", "displayName": "สนิมตราตรวจ", "canonical": "#a94f2c", "tonalRamp": ["#32130a", "#592313", "#81371f", "#a94f2c", "#c87551", "#df9f80", "#efc9b5", "#faeee7"] },
+      "rust-deep": { "role": "secondary", "displayName": "สนิมเข้ม", "canonical": "#78351f", "tonalRamp": ["#2d1008", "#4f1f11", "#78351f", "#9c5238", "#bb755a", "#d69d85", "#eac8b8", "#f8eee8"] },
+      "focus": { "role": "secondary", "displayName": "ส้มโฟกัส", "canonical": "#d97734", "tonalRamp": ["#351806", "#642f0b", "#974b15", "#c66725", "#d97734", "#e6a06c", "#f1c9aa", "#fbefe4"] },
+      "critical-surface": { "role": "tertiary", "displayName": "พื้นเสี่ยงสูง", "canonical": "#f9e1dc", "tonalRamp": ["#321916", "#5b2e28", "#85483f", "#ad675c", "#cf8f85", "#e7b7af", "#f3d5cf", "#f9e1dc"] },
+      "critical-ink": { "role": "tertiary", "displayName": "หมึกเสี่ยงสูง", "canonical": "#8f2d22", "tonalRamp": ["#32100c", "#581913", "#742119", "#8f2d22", "#b24f43", "#d17d72", "#e9b1a9", "#f8e7e4"] },
+      "review-surface": { "role": "tertiary", "displayName": "พื้นรอตรวจ", "canonical": "#fbefd1", "tonalRamp": ["#302812", "#58491e", "#816d31", "#aa914b", "#cdb575", "#e5d59f", "#f2e5bd", "#fbefd1"] },
+      "review-ink": { "role": "tertiary", "displayName": "หมึกรอตรวจ", "canonical": "#7a4a00", "tonalRamp": ["#2d1900", "#503000", "#7a4a00", "#9e681b", "#bd8a43", "#d7af72", "#ead2a8", "#f8edda"] },
+      "clear-surface": { "role": "tertiary", "displayName": "พื้นผลปกติ", "canonical": "#dfeadc", "tonalRamp": ["#1c291b", "#354b32", "#506d4c", "#72916e", "#98b493", "#bed5ba", "#dfeadc", "#f0f6ee"] },
+      "clear-ink": { "role": "tertiary", "displayName": "หมึกผลปกติ", "canonical": "#275b3b", "tonalRamp": ["#0b2113", "#163d27", "#275b3b", "#44795a", "#699a78", "#94bba0", "#c5dbc9", "#e8f2e9"] },
+      "info-surface": { "role": "tertiary", "displayName": "พื้นข้อมูล", "canonical": "#e1e8eb", "tonalRamp": ["#1d272b", "#37474e", "#536871", "#758a93", "#9bacb3", "#c0cdd2", "#e1e8eb", "#f1f5f6"] },
+      "info-ink": { "role": "tertiary", "displayName": "หมึกข้อมูล", "canonical": "#30546a", "tonalRamp": ["#0d1e28", "#1b3949", "#30546a", "#4d7288", "#7292a4", "#9db5c1", "#c9d9e0", "#eaf1f4"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display / Pridi", "purpose": "ข้อความนำหน้าเข้าสู่ระบบเท่านั้น" },
+      "headline": { "displayName": "Headline / Pridi", "purpose": "หัวพื้นที่ทำงานและ drawer" },
+      "title": { "displayName": "Title / Pridi", "purpose": "หัวแผงและหัวการ์ด" },
+      "body": { "displayName": "Body / IBM Plex Sans Thai", "purpose": "ข้อมูล ฟอร์ม ตาราง และคำอธิบาย" },
+      "label": { "displayName": "Label / IBM Plex Sans Thai", "purpose": "สถานะ metadata และหัวตาราง" }
+    },
+    "shadows": [
+      { "name": "ambient-panel", "value": "0 10px 30px rgba(29, 52, 40, 0.10)", "purpose": "sidebar บนมือถือและ toast" },
+      { "name": "drawer-edge", "value": "-18px 0 45px rgba(18, 55, 42, 0.16)", "purpose": "แยก review drawer จากบริบทด้านหลัง" }
+    ],
+    "motion": [
+      { "name": "drawer-enter", "value": "250ms cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "เปิด review drawer โดยรักษาความต่อเนื่องเชิงพื้นที่" },
+      { "name": "sidebar-enter", "value": "220ms ease-out", "purpose": "เปิด sidebar บนมือถือ" },
+      { "name": "loading-spin", "value": "800ms linear infinite", "purpose": "แสดงการประมวลผลที่กำลังเกิดขึ้นจริง" },
+      { "name": "reduced-motion", "value": "0.01ms", "purpose": "แทน animation และ transition เมื่อผู้ใช้ขอลดการเคลื่อนไหว" }
+    ],
+    "breakpoints": [
+      { "name": "compact-desktop", "value": "1050px" },
+      { "name": "mobile", "value": "760px" },
+      { "name": "small-mobile", "value": "440px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "การยืนยันหลักหนึ่งรายการต่อบริบท",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\">ยืนยันผลตรวจ <span aria-hidden=\"true\">→</span></button>",
+      "css": ".ds-btn-primary { min-height: 48px; border: 0; border-radius: 8px; padding: 10px 18px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: #17372a; color: #fffdf7; font: 700 16px/1.2 'IBM Plex Sans Thai', sans-serif; cursor: pointer; transition: background 160ms ease; } .ds-btn-primary:hover { background: #214f3b; } .ds-btn-primary:focus-visible { outline: 3px solid #d97734; outline-offset: 3px; } .ds-btn-primary:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "ช่องข้อมูลที่มี label มองเห็นเสมอและ focus ชัด",
+      "html": "<label class=\"ds-field\"><span>ค้นหาหลักฐาน</span><input type=\"search\" placeholder=\"ค้นหาชื่อ แปลง หรือพืช\"></label>",
+      "css": ".ds-field { display: grid; gap: 8px; color: #17372a; font: 600 15px/1.4 'IBM Plex Sans Thai', sans-serif; } .ds-field input { min-height: 46px; padding: 10px 13px; border: 1px solid #9eac9f; border-radius: 8px; background: #fffdf7; color: #17372a; font: 400 16px/1.55 'IBM Plex Sans Thai', sans-serif; } .ds-field input::placeholder { color: #52685b; } .ds-field input:hover { border-color: #2e5041; } .ds-field input:focus-visible { outline: 3px solid #d97734; outline-offset: 3px; }"
+    },
+    {
+      "name": "Active Navigation Item",
+      "kind": "nav",
+      "description": "รายการนำทางปัจจุบันบนพื้นหมึกทะเบียน",
+      "html": "<nav class=\"ds-nav\" aria-label=\"เมนูหลัก\"><a class=\"ds-nav-item ds-nav-active\" href=\"#\" aria-current=\"page\">ภาพรวม</a><a class=\"ds-nav-item\" href=\"#\">งานตรวจสอบ <span>2</span></a></nav>",
+      "css": ".ds-nav { width: 220px; padding: 12px; display: grid; gap: 5px; border-radius: 14px; background: #17372a; font: 400 16px/1.4 'IBM Plex Sans Thai', sans-serif; } .ds-nav-item { min-height: 46px; padding: 10px 12px; display: flex; align-items: center; gap: 12px; border-radius: 8px; color: #dce5dd; text-decoration: none; } .ds-nav-item:hover { background: rgba(255,255,255,0.08); color: #fff; } .ds-nav-item:focus-visible { outline: 3px solid #d97734; outline-offset: 2px; } .ds-nav-active { background: #dfe6d7; color: #17372a; font-weight: 700; } .ds-nav-item span { margin-left: auto; min-width: 24px; height: 24px; display: grid; place-items: center; border-radius: 999px; background: #a94f2c; color: #fff; font-size: 12px; }"
+    },
+    {
+      "name": "Inspection Status Stamps",
+      "kind": "chip",
+      "description": "สถานะตรวจที่มีข้อความ เส้นขอบ และสีร่วมกัน",
+      "html": "<div class=\"ds-stamps\" aria-label=\"ตัวอย่างสถานะ\"><span class=\"ds-stamp ds-critical\">เสี่ยงสูง</span><span class=\"ds-stamp ds-review\">ต้องตรวจสอบ</span><span class=\"ds-stamp ds-clear\">ผลเบื้องต้นปกติ</span></div>",
+      "css": ".ds-stamps { display: flex; flex-wrap: wrap; gap: 10px; font-family: 'IBM Plex Sans Thai', sans-serif; } .ds-stamp { display: inline-flex; align-items: center; min-height: 28px; padding: 5px 9px; border: 1px solid currentColor; border-radius: 4px; font-size: 12px; font-weight: 800; line-height: 1.1; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.65); } .ds-critical { background: #f9e1dc; color: #8f2d22; transform: rotate(-1deg); } .ds-review { background: #fbefd1; color: #7a4a00; transform: rotate(0.6deg); } .ds-clear { background: #dfeadc; color: #275b3b; }"
+    },
+    {
+      "name": "Evidence Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "กล่องหลักฐานที่วางต้นทางก่อนข้อสรุปของระบบ",
+      "html": "<article class=\"ds-evidence\"><h3>หลักฐานต้นทาง</h3><blockquote>“ฉีดพ่นบริเวณแปลงโคกช่วงเช้า”</blockquote><dl><dt>แหล่งข้อมูล</dt><dd>ข้อความเสียงจาก LINE</dd><dt>สถานะ</dt><dd>รอเจ้าหน้าที่ตรวจสอบ</dd></dl></article>",
+      "css": ".ds-evidence { max-width: 520px; padding: 19px; border: 1px solid #c9d2c5; border-radius: 14px; background: #fffdf7; color: #17372a; font-family: 'IBM Plex Sans Thai', sans-serif; } .ds-evidence h3 { margin: 0 0 12px; font: 600 20px/1.3 Pridi, serif; } .ds-evidence blockquote { margin: 0 0 18px; font: 500 20px/1.65 Pridi, serif; } .ds-evidence dl { margin: 0; display: grid; grid-template-columns: 130px 1fr; gap: 10px; } .ds-evidence dt { color: #52685b; } .ds-evidence dd { margin: 0; font-weight: 600; } .ds-evidence:focus-within { outline: 3px solid #d97734; outline-offset: 3px; }"
+    },
+    {
+      "name": "Review Queue Row",
+      "kind": "custom",
+      "description": "แถวงานตรวจที่สรุปบุคคล หลักฐานย่อ สถานะ และทางไปยังรายละเอียด",
+      "html": "<button class=\"ds-review-row\" type=\"button\"><span class=\"ds-avatar\" aria-hidden=\"true\">ส</span><span class=\"ds-review-copy\"><strong>สมพร ใจดี · แปลงโคก</strong><small>พบคำที่ตรงกับรายการความเสี่ยงสูง</small></span><span class=\"ds-stamp ds-critical\">เสี่ยงสูง</span><span class=\"ds-chevron\" aria-hidden=\"true\">›</span></button>",
+      "css": ".ds-review-row { width: 100%; min-height: 74px; padding: 15px 20px; display: grid; grid-template-columns: 44px minmax(0,1fr) auto 24px; gap: 13px; align-items: center; border: 0; border-bottom: 1px solid #e2e5dc; background: #fffdf7; color: #17372a; text-align: left; font-family: 'IBM Plex Sans Thai', sans-serif; cursor: pointer; } .ds-review-row:hover { background: #f4f4ec; } .ds-review-row:focus-visible { outline: 3px solid #d97734; outline-offset: -3px; } .ds-avatar { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 999px; background: #e0e7d7; font-weight: 700; } .ds-review-copy { min-width: 0; } .ds-review-copy strong, .ds-review-copy small { display: block; } .ds-review-copy small { margin-top: 2px; overflow: hidden; color: #68796f; text-overflow: ellipsis; white-space: nowrap; } .ds-stamp { padding: 5px 9px; border: 1px solid currentColor; border-radius: 4px; font-size: 11px; font-weight: 800; } .ds-critical { background: #f9e1dc; color: #8f2d22; transform: rotate(-1deg); } .ds-chevron { color: #6e7b73; font-size: 28px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "สมุดตรวจสหกรณ์",
+    "overview": "หน้าจอควรรู้สึกเหมือนทะเบียนภาคสนามที่ดูแลอย่างดี: กระดาษสีอุ่น หมึกเขียวเข้ม เส้นแบ่งบาง และตราประทับเล็ก ๆ ที่บอกผลการตรวจอย่างตรงไปตรงมา ความเป็นทางการมาจากลำดับข้อมูลและหลักฐาน ไม่ใช่ความเย็นชาของซอฟต์แวร์องค์กร\n\nระบบนี้เป็นเครื่องมือปฏิบัติงาน จึงให้ข้อมูลสำคัญมาก่อนการตกแต่ง ทุกผลจาก AI ต้องวางอยู่ข้างหลักฐานต้นทาง เหตุผล ความมั่นใจ และขั้นตอนตรวจโดยมนุษย์ ภาษาต้องเป็นกลาง กระชับ และไม่กล่าวโทษเกษตรกร",
+    "keyCharacteristics": [
+      "พื้นผิวกระดาษอุ่นตัดกับหมึกเขียวเข้มและสีสนิมเพียงเล็กน้อย",
+      "หัวเรื่อง Pridi ให้บุคลิกท้องถิ่นที่น่าเชื่อถือ เนื้อหา IBM Plex Sans Thai อ่านเร็วในงานหนาแน่น",
+      "สถานะดูเหมือนตราตรวจ มีข้อความและเส้นขอบเสมอ ไม่สื่อความหมายด้วยสีล้วน",
+      "โครงสร้าง evidence-first: ต้นทาง เหตุผล ผู้ตรวจ และประวัติการตัดสินใจต้องตามหาได้ง่าย",
+      "การยืนยันผลที่กระทบมาตรฐานเป็นการตัดสินใจของมนุษย์เสมอ"
+    ],
+    "rules": [
+      { "name": "The Sparse Accent Rule", "body": "สีสนิมเป็นเครื่องหมายกำกับ ไม่ใช่พื้นสีขนาดใหญ่; ให้หมึกเขียวและกระดาษครองหน้าจอ", "section": "colors" },
+      { "name": "The Status Is a Sentence Rule", "body": "ทุกสีสถานะต้องมีข้อความกำกับที่เข้าใจได้เมื่อมองเป็นขาวดำ", "section": "colors" },
+      { "name": "The Two-Voice Rule", "body": "ใช้ Pridi เฉพาะหัวเรื่อง ข้อความอ้างอิง และตัวเลขสำคัญ; งานควบคุมและข้อมูลทั้งหมดใช้ IBM Plex Sans Thai", "section": "typography" },
+      { "name": "The Ledger Rhythm Rule", "body": "จัดข้อมูลเป็นแถวและเส้นฐานสม่ำเสมอ; หลีกเลี่ยง masonry หรือการ์ดขนาดสุ่มที่ทำให้เปรียบเทียบหลักฐานยาก", "section": "layout" },
+      { "name": "The Flat Record Rule", "body": "เนื้อหาที่เป็นระเบียนอยู่บนเส้นและโทนพื้นผิว; เงาสงวนไว้ให้ชั้นที่ทับบริบทเดิม", "section": "elevation" }
+    ],
+    "dos": [
+      "Do เรียงหลักฐานต้นทาง เหตุผล ความมั่นใจ และผู้ตรวจให้ตามรอยได้ก่อนแสดงคำตัดสิน",
+      "Do ใช้ข้อความ ไอคอน และสีร่วมกันกับทุกสถานะ และรักษาคอนทราสต์ตาม WCAG 2.2 AA",
+      "Do เขียนภาษาไทยสั้น ชัด และบอกการกระทำถัดไป เช่น ‘ต้องตรวจสอบ’ หรือ ‘รอเจ้าหน้าที่’",
+      "Do รักษา focus ที่มองเห็นได้ ลำดับ tab ที่สมเหตุผล skip link และเป้าหมายแตะอย่างน้อย 44×44px",
+      "Do ให้มนุษย์ยืนยันผลที่กระทบสิทธิ์ มาตรฐาน หรือสถานะรับรอง และบันทึกผู้แก้ไขกับเวลา"
+    ],
+    "donts": [
+      "Don't แสดงผลจาก AI เป็นข้อสรุปสุดท้าย หรือทำให้ confidence ดูเหมือนใบรับรอง",
+      "Don't ใช้สีอย่างเดียว ใช้ป้าย ‘ผ่าน/ไม่ผ่าน’ ที่กำกวม หรือใช้ภาษากล่าวโทษเกษตรกร",
+      "Don't เติม gradient สีสด glassmorphism เงาหนัก หรือการ์ดลอยหลายชั้นที่ขัดกับภาษาสมุดทะเบียน",
+      "Don't ซ่อนหลักฐานสำคัญบนมือถือ; ให้จัดลำดับใหม่แทนการตัดทิ้ง",
+      "Don't เปิด modal/drawer โดยไม่จัดการ focus, Escape, backdrop และการคืน focus อย่างครบถ้วน"
+    ]
+  }
+}

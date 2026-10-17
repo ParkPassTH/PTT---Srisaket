@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "express",
+  "functions": {
+    "api/index.ts": {
+      "includeFiles": "public/**",
+      "maxDuration": 10
+    }
+  },
+  "rewrites": [
+    { "source": "/webhooks/:path*", "destination": "/api" },
+    { "source": "/api/:path*", "destination": "/api" },
+    { "source": "/", "destination": "/index.html" }
+  ]
+}

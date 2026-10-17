@@ -1,0 +1,16 @@
+node_modules/
+node_modules.previous/
+package-lock.previous.json
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.impeccable/review/
+.impeccable/config.local.json
+.impeccable/questions/
+.codex/
+.cursor/
+.gemini/
