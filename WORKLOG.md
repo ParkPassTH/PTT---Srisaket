@@ -199,3 +199,4 @@
 - ล้าง secret ออกจาก `.env.example` ในเครื่อง โดยไม่แก้ `.env.local`
 - เพิ่ม Vercel function duration เป็น 60 วินาทีสำหรับ audio pipeline
 - credential smoke test ในเครื่องยังรันจริงไม่ได้ เพราะ `.env.local` มีเฉพาะ `VERCEL_OIDC_TOKEN`; `vercel env ls` ไม่พบ project variables จึงต้องตั้งค่าใน Vercel ก่อนทดสอบภายนอก
+- push commit `7bd2409` ไป `main`; Vercel production build สำเร็จและ `https://ptt-srisaket.vercel.app/health` ตอบ HTTP 200
