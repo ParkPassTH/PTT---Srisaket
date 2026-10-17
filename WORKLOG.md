@@ -171,3 +171,5 @@
 - เพิ่มคำเตือนว่า Vercel preview ยังใช้ memory store และยังไม่ใช่ voice pipeline แบบครบวงจร
 - ป้องกัน local agent configuration และ Impeccable session artifacts ไม่ให้เข้า Git
 - เป้าหมาย repository: `ParkPassTH/PTT---Srisaket`
+- ล้างค่าจริงออกจาก `.env.example` หลัง GitHub Push Protection ตรวจพบก่อนรับ push; remote ไม่ได้รับ commit ที่มี secret
+- push สำเร็จที่ branch `main` commit `c7dd0c1`
