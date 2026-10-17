@@ -173,3 +173,8 @@
 - เป้าหมาย repository: `ParkPassTH/PTT---Srisaket`
 - ล้างค่าจริงออกจาก `.env.example` หลัง GitHub Push Protection ตรวจพบก่อนรับ push; remote ไม่ได้รับ commit ที่มี secret
 - push สำเร็จที่ branch `main` commit `c7dd0c1`
+## 2026-10-18 — Vercel TypeScript build compatibility
+
+- แก้ conditional ESM/CJS export ของ Helmet ให้ Vercel และ local TypeScript มอง callable middleware ตรงกัน
+- pin TypeScript/Helmet ตาม lockfile เพื่อให้ build ทำซ้ำได้
+- สาเหตุจาก Vercel build รายงาน `TS2349` ที่ `src/app.ts`

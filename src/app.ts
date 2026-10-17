@@ -1,7 +1,7 @@
-import express, { type ErrorRequestHandler } from "express";
+import express, { type ErrorRequestHandler, type RequestHandler } from "express";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import helmet from "helmet";
+import helmetModule, { type HelmetOptions } from "helmet";
 import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
 import type { AppConfig } from "./config.js";
@@ -16,6 +16,12 @@ const reviewSchema = z.object({
   decision: z.enum(["APPROVE", "FLAG", "REQUEST_INFO", "VOID"]),
   reason: z.string().trim().min(5).max(500)
 });
+
+// Helmet publishes conditional ESM/CJS exports. Normalize the export explicitly
+// so TypeScript/Vercel and local Node builds agree on the callable middleware.
+const helmet = (
+  (helmetModule as unknown as { default?: unknown }).default ?? helmetModule
+) as (options?: Readonly<HelmetOptions>) => RequestHandler;
 
 export function createApp(dependencies: { config: AppConfig; repository: Repository }) {
   const { config, repository } = dependencies;
