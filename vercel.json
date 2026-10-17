@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "express",
+  "framework": null,
   "functions": {
     "api/index.ts": {
       "includeFiles": "public/**",

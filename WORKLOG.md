@@ -183,3 +183,5 @@
 - เพิ่ม startup fallback ที่รายงานชื่อ environment field ที่ผิดโดยไม่เปิดเผยค่า secret
 - เปลี่ยนกรณี configuration ผิดจาก `FUNCTION_INVOCATION_FAILED` เป็น JSON 503 ที่แก้ไขได้
 - ใช้เพื่อวินิจฉัย deployment `ptt-srisaket.vercel.app` ซึ่ง `/health` ตอบ 500 ก่อนเข้า Express route
+- Function Logs ยืนยันสาเหตุจริง: Express framework auto-detection เลือก `src/app.ts` แทน `api/index.ts`
+- ปิด framework preset ด้วย `framework: null` เพื่อให้ Vercel ใช้ function entrypoint ที่กำหนดไว้

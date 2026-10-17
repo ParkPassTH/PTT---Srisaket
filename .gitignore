@@ -14,3 +14,5 @@ coverage/
 .codex/
 .cursor/
 .gemini/
+
+.vercel/
