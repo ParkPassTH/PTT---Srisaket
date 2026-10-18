@@ -42,7 +42,7 @@
 | F-021 | Public trace page | ผู้ตรวจสอบ | Done | privacy-safe UI รองรับ invalid/void/recall states |
 | F-022 | Audit trail | Auditor/Admin | In Progress | review audit พร้อม; รอครอบคลุมทุก entity |
 | F-023 | Google Sheets repository adapter | ระบบ | Implemented | สร้าง headers อัตโนมัติและอ่าน/เขียนผ่าน Repository contract |
-| F-024 | Retry, outbox และ dead-letter handling | ระบบ/Admin | Planned | งานชั่วคราว retry; งานเกินกำหนดกู้จาก Dashboard ได้ |
+| F-024 | Retry, outbox และ dead-letter handling | ระบบ/Admin | In Progress | LINE outbox/retry/dead-letter และหน้ากู้พร้อม; รอ cron worker แยกสำหรับ retry ตามเวลาแม้ไม่มี traffic |
 | F-025 | Health check และ structured logs | Admin | In Progress | API health/log พร้อม; รอ dependency/worker health |
 | F-026 | Validation และ error handling | ทุกคน | Done | error ให้ next step และ API ใช้รูปแบบคงที่ |
 | F-027 | Responsive + WCAG 2.2 AA baseline | เจ้าหน้าที่ | In Progress | keyboard/focus/44px/mobile พร้อม; รอ formal audit |
@@ -96,3 +96,4 @@
 | 17 ต.ค. 2569 | เพิ่มคู่มือ integration แบบแบ่ง Gate A–D โดยไม่เปลี่ยนขอบเขตฟีเจอร์ | ทำให้แยกสถานะ memory demo ออกจาก Sheets/LINE/OpenAI จริงและทดสอบระดับถัดไปได้ | Codex |
 | 18 ต.ค. 2569 | เพิ่ม Gemini เป็นทางเลือก Gate C ผ่าน provider abstraction | ลด vendor lock-in; Gemini รองรับ audio transcription และ structured output แต่ยังไม่ implement adapter | Codex |
 | 18 ต.ค. 2569 | เพิ่มการต่อบทสนทนาในรายการเดิมและจับคู่แปลงอัตโนมัติ | ลดรายการซ้ำและไม่ถามข้อมูลที่มีอยู่แล้วในทะเบียน | Codex |
+| 18 ต.ค. 2569 | เพิ่ม LINE Outbox, retry, dead-letter และ readiness | ป้องกันข้อความแจ้งเตือนหายเมื่อ LINE ล่มและให้ Admin กู้คิวได้ | Codex |

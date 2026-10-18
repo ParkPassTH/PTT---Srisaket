@@ -128,7 +128,7 @@ export interface Lot {
 
 export interface AuditEvent {
   auditId: string;
-  entityType: "ACTIVITY" | "LOT" | "FARMER" | "PLOT" | "REPORT" | "USER" | "RULE";
+  entityType: "ACTIVITY" | "LOT" | "FARMER" | "PLOT" | "REPORT" | "USER" | "RULE" | "OUTBOX";
   entityId: string;
   actorId: string;
   action: string;
@@ -136,6 +136,21 @@ export interface AuditEvent {
   before?: unknown;
   after?: unknown;
   occurredAt: string;
+}
+
+export interface OutboxMessage {
+  messageId: string;
+  channel: "LINE";
+  recipient: string;
+  body: string;
+  relatedEntityId?: string;
+  status: "PENDING" | "DELIVERED" | "DEAD_LETTER";
+  attempts: number;
+  maxAttempts: number;
+  nextAttemptAt: string;
+  lastError?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface SessionUser {

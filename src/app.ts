@@ -8,13 +8,14 @@ import QRCode from "qrcode";
 import type { AppConfig } from "./config.js";
 import type { Repository } from "./repositories/repository.js";
 import { AuthService } from "./services/auth-service.js";
-import { LineService, pushLineText } from "./services/line-service.js";
+import { LineService } from "./services/line-service.js";
 import { createVoiceAnalyzer } from "./services/gemini-service.js";
 import { ReviewService } from "./services/review-service.js";
 import { HttpError } from "./lib/http-error.js";
 import { createId, createTraceToken } from "./lib/ids.js";
 import { evaluateIcsRisk } from "./domain/ics-rules.js";
 import type { Farmer, Plot } from "./domain/types.js";
+import { OutboxService } from "./services/outbox-service.js";
 
 const loginSchema = z.object({ email: z.string().email(), password: z.string().min(8) });
 const reviewSchema = z.object({
@@ -52,6 +53,7 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
   const auth = new AuthService(config);
   const reviewService = new ReviewService(repository);
   const lineService = new LineService(config, repository, createVoiceAnalyzer(config));
+  const outboxService = new OutboxService(config, repository);
   const publicDirectory = fileURLToPath(new URL("../public", import.meta.url));
 
   app.set("trust proxy", 1);
@@ -89,6 +91,15 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
     response.json({ status: "ok", version: "0.1.0", time: new Date().toISOString() });
   });
 
+  app.get("/ready", async (_request, response) => {
+    try {
+      await repository.getDashboardSummary();
+      const line = Boolean(config.LINE_CHANNEL_SECRET && config.LINE_CHANNEL_ACCESS_TOKEN);
+      const ai = config.AI_PROVIDER === "gemini" ? Boolean(config.GEMINI_API_KEY) : Boolean(config.OPENAI_API_KEY);
+      response.status(line && ai ? 200 : 503).json({ status:line && ai ? "ready" : "degraded", dependencies:{ dataStore:"ok", line:line ? "configured" : "missing", ai:ai ? "configured" : "missing" }, time:new Date().toISOString() });
+    } catch { response.status(503).json({ status:"unavailable", dependencies:{ dataStore:"error" }, time:new Date().toISOString() }); }
+  });
+
   app.post("/api/auth/login", rateLimit({ windowMs: 15 * 60 * 1000, limit: 10 }), (request, response, next) => {
     try {
       const credentials = loginSchema.parse(request.body);
@@ -116,6 +127,30 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
       ai: { provider: config.AI_PROVIDER, configured: config.AI_PROVIDER === "gemini" ? Boolean(config.GEMINI_API_KEY) : Boolean(config.OPENAI_API_KEY), model: config.AI_PROVIDER === "gemini" ? config.GEMINI_MODEL : config.OPENAI_EXTRACTION_MODEL },
       publicTrace: { configured: config.publicTraceEnabled }
     });
+  });
+
+  app.get("/api/system/outbox", auth.requireUser, auth.requireRole("ADMIN"), async (_request, response, next) => {
+    try {
+      const messages = await repository.listOutbox();
+      response.json({ messages, summary:{ pending:messages.filter((item) => item.status === "PENDING").length, deadLetter:messages.filter((item) => item.status === "DEAD_LETTER").length, delivered:messages.filter((item) => item.status === "DELIVERED").length } });
+    } catch (error) { next(error); }
+  });
+
+  app.post("/api/system/outbox/process", auth.requireUser, auth.requireRole("ADMIN"), async (request, response, next) => {
+    try {
+      const results = await outboxService.processDue();
+      await repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"OUTBOX", entityId:"due-queue", actorId:request.user!.userId, action:"PROCESS_DUE", after:{ processed:results.length }, occurredAt:new Date().toISOString() });
+      response.json({ processed:results.length, messages:results });
+    } catch (error) { next(error); }
+  });
+
+  app.post("/api/system/outbox/:messageId/retry", auth.requireUser, auth.requireRole("ADMIN"), async (request, response, next) => {
+    try {
+      const before = await repository.getOutboxMessage(request.params.messageId as string);
+      const message = await outboxService.retry(request.params.messageId as string);
+      await repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"OUTBOX", entityId:message.messageId, actorId:request.user!.userId, action:"MANUAL_RETRY", before, after:message, occurredAt:new Date().toISOString() });
+      response.json({ message });
+    } catch (error) { next(error); }
   });
 
   app.get("/api/farmers", auth.requireUser, async (_request, response, next) => {
@@ -230,14 +265,15 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
           user: request.user!
         });
         let notificationSent = false;
+        let notificationQueued = false;
         if (input.decision === "REQUEST_INFO") {
           const farmer = await repository.getFarmer(activity.farmerId);
           if (farmer?.lineUserId) {
-            try { await pushLineText(config, farmer.lineUserId, `ขอข้อมูลเพิ่มสำหรับรายการ ${activity.activityId}\nรายละเอียด: ${input.reason}\nส่งเสียงตอบได้เลย ระบบจะเติมข้อมูลในรายการเดิมให้อัตโนมัติ ไม่สร้างรายการใหม่`); notificationSent = true; }
+            try { const queued=await outboxService.enqueueLine(farmer.lineUserId, `ขอข้อมูลเพิ่มสำหรับรายการ ${activity.activityId}\nรายละเอียด: ${input.reason}\nส่งเสียงตอบได้เลย ระบบจะเติมข้อมูลในรายการเดิมให้อัตโนมัติ ไม่สร้างรายการใหม่`, activity.activityId); notificationQueued=true; notificationSent = queued.status === "DELIVERED"; }
             catch (error) { console.error(JSON.stringify({ level:"error", code:"LINE_PUSH_FAILED", activityId:activity.activityId, message:error instanceof Error ? error.message : String(error) })); }
           }
         }
-        response.json({ activity, notificationSent });
+        response.json({ activity, notificationQueued, notificationSent });
       } catch (error) {
         next(error);
       }

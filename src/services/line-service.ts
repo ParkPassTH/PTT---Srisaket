@@ -6,6 +6,7 @@ import { evaluateIcsRisk } from "../domain/ics-rules.js";
 import type { VoiceAnalyzer } from "./gemini-service.js";
 import { createId } from "../lib/ids.js";
 import type { Activity } from "../domain/types.js";
+import { OutboxService } from "./outbox-service.js";
 
 interface LineEvent { type: string; webhookEventId?: string; replyToken?: string; timestamp: number; source: { type: string; userId?: string }; message?: { type: string; id: string; text?: string; duration?: number; contentProvider?: { type: string } }; }
 interface LineWebhookBody { events?: unknown[]; }
@@ -21,10 +22,12 @@ export function verifyLineSignature(rawBody: Buffer, signature: string | undefin
 function isMessageEvent(value: unknown): value is LineEvent { const x = value as LineEvent; return !!x && typeof x === "object" && x.type === "message" && !!x.message; }
 
 export class LineService {
-  constructor(private readonly config: AppConfig, private readonly repository: Repository, private readonly analyzer?: VoiceAnalyzer) {}
+  private readonly outbox: OutboxService;
+  constructor(private readonly config: AppConfig, private readonly repository: Repository, private readonly analyzer?: VoiceAnalyzer) { this.outbox = new OutboxService(config, repository); }
 
   async acceptWebhook(rawBody: Buffer, signature?: string) {
     if (!verifyLineSignature(rawBody, signature, this.config.LINE_CHANNEL_SECRET)) throw new HttpError(401, "INVALID_LINE_SIGNATURE", "LINE webhook signature ไม่ถูกต้อง");
+    await this.outbox.processDue(10).catch(() => undefined);
     let body: LineWebhookBody;
     try { body = JSON.parse(rawBody.toString("utf8")) as LineWebhookBody; } catch { throw new HttpError(400, "INVALID_JSON", "Webhook body ไม่ใช่ JSON ที่ถูกต้อง"); }
     let accepted = 0, duplicates = 0, ignored = 0, failed = 0;
@@ -52,13 +55,13 @@ export class LineService {
         const completed = await this.analyzeActivity(activity, farmer.farmerId);
         await this.repository.saveActivity(completed);
         await this.snapshot("ACTIVITY", activity.activityId, "system:voice-pipeline", awaiting ? "FOLLOWUP_MERGED" : "VOICE_PROCESSED", activity, completed);
-        await pushLineText(this.config, event.source.userId!, this.summary(completed.activityId, completed.transcript!, completed.riskStatus));
+        await this.outbox.enqueueLine(event.source.userId!, this.summary(completed.activityId, completed.transcript!, completed.riskStatus), completed.activityId);
         accepted++;
       } catch (error) {
         const failedActivity = { ...activity, processingStatus: "FAILED_RETRYABLE" as const, flagReasons: [error instanceof Error ? error.message.slice(0, 300) : "Unknown processing error"], updatedAt: new Date().toISOString() };
         await this.repository.saveActivity(failedActivity);
         await this.snapshot("ACTIVITY", activity.activityId, "system:voice-pipeline", "VOICE_PROCESSING_FAILED", activity, failedActivity, failedActivity.flagReasons[0]);
-        await pushLineText(this.config, event.source.userId!, "รับไฟล์เสียงแล้ว แต่ประมวลผลไม่สำเร็จ เจ้าหน้าที่สามารถตรวจและลองใหม่ได้").catch(() => undefined);
+        await this.outbox.enqueueLine(event.source.userId!, "รับไฟล์เสียงแล้ว แต่ประมวลผลไม่สำเร็จ เจ้าหน้าที่สามารถตรวจและลองใหม่ได้", activity.activityId).catch(() => undefined);
         console.error(JSON.stringify({ level: "error", code: "VOICE_PROCESSING_FAILED", activityId: activity.activityId, message: error instanceof Error ? error.message : String(error) })); failed++;
       }
     }
@@ -78,7 +81,7 @@ export class LineService {
       const completed = await this.analyzeActivity(processing, before.farmerId);
       await this.repository.saveActivity(completed);
       await this.snapshot("ACTIVITY", activityId, actorId, "RETRY_SUCCEEDED", processing, completed);
-      if (farmer?.lineUserId) await pushLineText(this.config, farmer.lineUserId, this.summary(completed.activityId, completed.transcript!, completed.riskStatus)).catch(() => undefined);
+      if (farmer?.lineUserId) await this.outbox.enqueueLine(farmer.lineUserId, this.summary(completed.activityId, completed.transcript!, completed.riskStatus), completed.activityId).catch(() => undefined);
       return completed;
     } catch (error) {
       const failed = { ...processing, processingStatus:"FAILED_RETRYABLE" as const, flagReasons:[error instanceof Error ? error.message.slice(0,300) : "Unknown processing error"], updatedAt:new Date().toISOString() };
@@ -183,10 +186,4 @@ function mergeExtracted(activity: Activity, next: Awaited<ReturnType<VoiceAnalyz
     isHarvesting:next.isHarvesting || activity.harvestAmount !== undefined,
     fieldConfidence:{ ...(activity.confidence ? { existing:activity.confidence } : {}), ...next.fieldConfidence }
   };
-}
-
-export async function pushLineText(config: AppConfig, lineUserId: string, text: string) {
-  if (!config.LINE_CHANNEL_ACCESS_TOKEN) throw new Error("LINE_CHANNEL_ACCESS_TOKEN is not configured");
-  const response = await fetch("https://api.line.me/v2/bot/message/push", { method:"POST", headers:{ Authorization:`Bearer ${config.LINE_CHANNEL_ACCESS_TOKEN}`, "Content-Type":"application/json" }, body:JSON.stringify({ to:lineUserId, messages:[{ type:"text", text:text.slice(0,5000) }] }), signal:AbortSignal.timeout(10_000) });
-  if (!response.ok) throw new Error(`LINE push API returned ${response.status}: ${(await response.text()).slice(0,200)}`);
 }

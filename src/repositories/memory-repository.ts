@@ -1,4 +1,4 @@
-import type { Activity, AuditEvent, Farmer, Lot, Plot, Review } from "../domain/types.js";
+import type { Activity, AuditEvent, Farmer, Lot, OutboxMessage, Plot, Review } from "../domain/types.js";
 import type { ActivityFilters, Repository } from "./repository.js";
 
 /** Empty, process-local repository for tests and local development only. */
@@ -9,6 +9,7 @@ export class MemoryRepository implements Repository {
   private plots = new Map<string, Plot>();
   private reviews: Review[] = [];
   private auditEvents: AuditEvent[] = [];
+  private outbox = new Map<string, OutboxMessage>();
 
   async getDashboardSummary() {
     const activities = [...this.activities.values()];
@@ -51,4 +52,7 @@ export class MemoryRepository implements Repository {
   async savePlot(item: Plot) { this.plots.set(item.plotId, structuredClone(item)); }
   async saveAuditEvent(item: AuditEvent) { this.auditEvents.push(structuredClone(item)); }
   async listAuditEvents(id: string) { return this.auditEvents.filter((item) => item.entityId === id).map((item) => structuredClone(item)); }
+  async listOutbox() { return [...this.outbox.values()].sort((a,b) => b.createdAt.localeCompare(a.createdAt)).map((item) => structuredClone(item)); }
+  async getOutboxMessage(id: string) { const item=this.outbox.get(id); return item ? structuredClone(item) : undefined; }
+  async saveOutboxMessage(item: OutboxMessage) { this.outbox.set(item.messageId, structuredClone(item)); }
 }

@@ -1,4 +1,4 @@
-import type { Activity, AuditEvent, Farmer, Lot, Plot, Review } from "../domain/types.js";
+import type { Activity, AuditEvent, Farmer, Lot, OutboxMessage, Plot, Review } from "../domain/types.js";
 
 export interface ActivityFilters {
   status?: string;
@@ -34,4 +34,7 @@ export interface Repository {
   savePlot(plot: Plot): Promise<void>;
   saveAuditEvent(event: AuditEvent): Promise<void>;
   listAuditEvents(entityId: string): Promise<AuditEvent[]>;
+  listOutbox(): Promise<OutboxMessage[]>;
+  getOutboxMessage(messageId: string): Promise<OutboxMessage | undefined>;
+  saveOutboxMessage(message: OutboxMessage): Promise<void>;
 }

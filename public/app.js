@@ -195,7 +195,7 @@ async function loadIntegrations() {
   const grid = $("#integration-grid");
   grid.innerHTML = `<div class="loading-state"><span class="spinner"></span> กำลังตรวจการตั้งค่า...</div>`;
   try {
-    const status = await api("/api/integrations/status");
+    const [status, outbox] = await Promise.all([api("/api/integrations/status"), api("/api/system/outbox")]);
     const items = [
       ["ฐานข้อมูล", status.dataStore.configured, status.dataStore.configured ? "Google Sheets" : "Memory ชั่วคราว", "ตั้ง DATA_DRIVER=google-sheets และข้อมูลบัญชีบริการ"],
       ["LINE Messaging API", status.line.configured, status.line.configured ? "Webhook พร้อมรับข้อความ" : "ยังขาด Channel secret หรือ access token", "ตั้ง LINE_CHANNEL_SECRET และ LINE_CHANNEL_ACCESS_TOKEN"],
@@ -203,7 +203,14 @@ async function loadIntegrations() {
       ["หน้าตรวจสอบล็อต", status.publicTrace.configured, status.publicTrace.configured ? "เปิดใช้งาน" : "ปิดใช้งาน", "ตั้ง PUBLIC_TRACE_ENABLED=true"]
     ];
     grid.innerHTML = items.map(([name, ready, detail, action]) => `<article class="integration-card ${ready ? "ready" : "attention"}"><div class="integration-head"><h3>${escapeHtml(name)}</h3><span class="status ${ready ? "status-clear" : "status-review"}">${ready ? "พร้อม" : "ต้องตั้งค่า"}</span></div><strong>${escapeHtml(detail)}</strong><p>${ready ? "ระบบพบค่าที่จำเป็นแล้ว" : escapeHtml(action)}</p></article>`).join("");
+    renderOutbox(outbox);
   } catch (error) { grid.innerHTML = `<div class="empty-state"><strong>ตรวจสถานะไม่ได้</strong><p>${escapeHtml(error.message)}</p></div>`; }
+}
+
+function renderOutbox({ messages, summary }) {
+  $("#outbox-summary").textContent = `รอส่ง ${summary.pending} · ส่งไม่สำเร็จถาวร ${summary.deadLetter} · ส่งแล้ว ${summary.delivered}`;
+  const actionable = messages.filter((item) => item.status !== "DELIVERED").slice(0,20);
+  $("#outbox-list").innerHTML = actionable.map((item) => `<article class="outbox-row"><div><strong>${item.status === "DEAD_LETTER" ? "ต้องกู้ด้วยเจ้าหน้าที่" : "รอส่งอัตโนมัติ"}</strong><small>${escapeHtml(item.relatedEntityId || item.messageId)} · ลองแล้ว ${item.attempts}/${item.maxAttempts}</small><p>${escapeHtml(item.lastError || "ระบบจะส่งเมื่อถึงเวลาที่กำหนด")}</p></div><button class="button secondary-button" type="button" data-retry-outbox="${escapeHtml(item.messageId)}">ลองส่งตอนนี้</button></article>`).join("") || `<div class="empty-state"><strong>ไม่มีข้อความค้าง</strong><p>ข้อความ LINE ส่งสำเร็จแล้ว หรือยังไม่เคยมีงานแจ้งเตือน</p></div>`;
 }
 
 function openEntityDialog(mode, farmerId, extra = {}) {
@@ -354,6 +361,8 @@ $("#lot-list").addEventListener("change", async (event) => {
 $("#add-farmer-button").addEventListener("click", () => openEntityDialog("farmer"));
 $("#farmer-search").addEventListener("input", renderFarmers);
 $("#refresh-integrations").addEventListener("click", loadIntegrations);
+$("#process-outbox").addEventListener("click", async (event) => { event.currentTarget.disabled=true; try { const result=await api("/api/system/outbox/process", { method:"POST" }); showToast(`ประมวลผล ${result.processed} ข้อความ`); await loadIntegrations(); } catch(error) { showToast(error.message); } finally { event.currentTarget.disabled=false; } });
+$("#outbox-list").addEventListener("click", async (event) => { const button=event.target.closest("[data-retry-outbox]"); if (!button) return; button.disabled=true; try { const { message }=await api(`/api/system/outbox/${encodeURIComponent(button.dataset.retryOutbox)}/retry`, { method:"POST" }); showToast(message.status === "DELIVERED" ? "ส่งข้อความสำเร็จ" : "ยังส่งไม่ได้ ระบบเก็บไว้ลองใหม่แล้ว"); await loadIntegrations(); } catch(error) { showToast(error.message); button.disabled=false; } });
 $("#entity-dialog-close").addEventListener("click", () => $("#entity-dialog").close());
 $("#entity-cancel").addEventListener("click", () => $("#entity-dialog").close());
 $("#entity-form").addEventListener("submit", async (event) => {

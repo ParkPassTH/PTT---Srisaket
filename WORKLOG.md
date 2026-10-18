@@ -248,3 +248,14 @@
 - เติมพืชจากทะเบียนอัตโนมัติก่อนตรวจ required fields เมื่อเสียงไม่ได้พูดพืช ลดคำถามที่ไม่จำเป็น
 - ปรับข้อความขอข้อมูลเพิ่มให้เกษตรกรส่งเสียงตอบได้ทันที ไม่ต้องพูด Activity ID
 - เพิ่ม regression tests สำหรับ `แปลง 1` ↔ `แปลงหนึ่ง` และการรวม follow-up; test ผ่าน 19/19
+
+## 2026-10-18 — Durable LINE notification outbox
+
+- เพิ่ม worksheet `Outbox` ที่สร้าง schema อัตโนมัติใน Google Sheets
+- บันทึกข้อความก่อนเรียก LINE Push API และเก็บสถานะ `PENDING`, `DELIVERED`, `DEAD_LETTER`
+- เพิ่ม exponential backoff สูงสุด 30 นาทีและย้ายเข้า dead letter หลังล้มเหลว 5 ครั้ง
+- retry งานที่ถึงเวลาแบบ opportunistic เมื่อ LINE webhook ถัดไปเข้ามา
+- เพิ่ม Admin API และหน้า Dashboard สำหรับดูจำนวนค้าง ลองส่งงานที่ถึงเวลา และกู้ข้อความรายรายการ
+- เพิ่ม `/ready` เพื่อตรวจ data store และความครบถ้วนของ LINE/AI configuration โดยไม่เปิดเผย secret
+- เพิ่ม audit snapshot เมื่อ Admin สั่ง process/retry คิว
+- เพิ่ม automated tests กรณีส่งล้มเหลว ส่งซ้ำสำเร็จโดยไม่สร้างรายการซ้ำ และเข้าสู่ dead letter

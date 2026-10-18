@@ -49,7 +49,7 @@
 - [-] T-207 deterministic ICS rule engine + test fixtures — engine พร้อม รอ approved rules
 - [-] T-208 confirmation and correction conversation — ยืนยันรายการผ่าน LINE พร้อม; รอแก้ไขรายช่อง — F-008
 - [ ] T-209 Flex Message templates + accessible wording — F-009
-- [ ] T-210 retry/outbox/dead-letter workflow — F-024
+- [-] T-210 retry/outbox/dead-letter workflow — LINE outbox, backoff, dead-letter และหน้ากู้พร้อม; รอ cron worker — F-024
 - [x] T-211 audit snapshots ของ LINE lifecycle และ account linking — F-022
 - [x] T-212 ผูกเสียงตอบข้อมูลเพิ่มเข้ากับ activity ที่รอเกษตรกรล่าสุด — F-032
 - [x] T-213 จับคู่รหัส/ชื่อ/เลขแปลงและเติมพืชจากทะเบียนก่อนตรวจข้อมูลครบ — F-033
@@ -79,7 +79,7 @@
 
 ## Phase 5 — Operations และ Deployment
 
-- [-] T-501 health/readiness endpoints — `/health` พร้อม รอ dependency readiness
+- [-] T-501 health/readiness endpoints — `/health` และ `/ready` ตรวจ data store/config พร้อม; รอ active probe LINE/AI
 - [ ] T-502 backup/export/restore drill — F-031
 - [x] T-503 free-tier hosting selection and config — Render Blueprint พร้อม พร้อมระบุข้อจำกัด
 - [ ] T-504 CI deployment pipeline — F-029, F-030
