@@ -34,8 +34,10 @@ const plotSchema = z.object({
   crop: z.string().trim().min(1).max(120),
   status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"), areaRai:z.coerce.number().nonnegative().optional(), gpsLat:z.coerce.number().min(-90).max(90).optional(), gpsLng:z.coerce.number().min(-180).max(180).optional(), certificationStatus:z.enum(["ORGANIC", "CONVERSION", "CONVENTIONAL"]).optional(), conversionStartedAt:z.string().date().optional(), conversionEndsAt:z.string().date().optional(), previousChemicalUse:z.string().trim().max(500).optional(), estimatedYield:z.coerce.number().nonnegative().optional(), estimatedYieldUnit:z.string().trim().max(30).optional()
 });
-const lotCreateSchema = z.object({ activityId:z.string().trim().min(1) });
+const lotCreateSchema = z.object({ activityId:z.string().trim().min(1), storageLocationId:z.string().trim().min(1) });
 const lotStatusSchema = z.object({ status:z.enum(["IN_STOCK", "RESERVED", "SHIPPED", "VOID", "RECALLED"]), reason:z.string().trim().min(5).max(500) });
+const storageLocationSchema = z.object({ name:z.string().trim().min(2).max(120), locationType:z.string().trim().max(80).optional(), address:z.string().trim().max(300).optional(), zone:z.string().trim().max(80).optional() });
+const lotStorageSchema = z.object({ storageLocationId:z.string().trim().min(1), reason:z.string().trim().min(5).max(500) });
 const activityCorrectionSchema = z.object({
   occurredAt:z.string().datetime({ offset:true }), plotId:z.string().trim().min(1), crop:z.string().trim().min(1).max(120),
   activityType:z.string().trim().min(1).max(120), inputsUsed:z.string().trim().max(300).optional(),
@@ -335,6 +337,22 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
     }
   });
 
+  app.get("/api/storage-locations", auth.requireUser, async (_request, response, next) => {
+    try { response.json({ locations:await repository.listStorageLocations() }); } catch (error) { next(error); }
+  });
+
+  app.post("/api/storage-locations", auth.requireUser, auth.requireRole("WAREHOUSE", "ADMIN"), async (request, response, next) => {
+    try {
+      const input=storageLocationSchema.parse(request.body); const now=new Date().toISOString();
+      const duplicate=(await repository.listStorageLocations()).find((item) => item.name.toLocaleLowerCase("th-TH") === input.name.toLocaleLowerCase("th-TH"));
+      if (duplicate) throw new HttpError(409,"STORAGE_LOCATION_EXISTS","มีสถานที่ชื่อนี้อยู่แล้ว กรุณาเลือกจากรายการเดิม");
+      const location={ locationId:createId("LOC"), name:input.name, ...(input.locationType?{locationType:input.locationType}:{}), ...(input.address?{address:input.address}:{}), ...(input.zone?{zone:input.zone}:{}), status:"ACTIVE" as const, createdAt:now, updatedAt:now };
+      await repository.saveStorageLocation(location);
+      await repository.saveAuditEvent({ auditId:createId("AUD"),entityType:"STORAGE_LOCATION",entityId:location.locationId,actorId:request.user!.userId,action:"STORAGE_LOCATION_CREATED",after:location,occurredAt:now });
+      response.status(201).json({ location });
+    } catch(error){ next(error); }
+  });
+
   app.post("/api/lots", auth.requireUser, auth.requireRole("WAREHOUSE", "ADMIN"), async (request, response, next) => {
     try {
       const input = lotCreateSchema.parse(request.body);
@@ -344,8 +362,10 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
       if (activity.riskStatus !== "APPROVED") throw new HttpError(409, "ACTIVITY_NOT_APPROVED", "ต้องอนุมัติกิจกรรมก่อนสร้างล็อต");
       if (!isHarvestActivity(activity.activityType)) throw new HttpError(409, "NOT_HARVEST_ACTIVITY", "สร้างล็อตได้เฉพาะกิจกรรมที่ระบุว่าเก็บเกี่ยว");
       if (!activity.crop || !activity.plotName || !activity.harvestAmount || !activity.harvestUnit) throw new HttpError(409, "HARVEST_DATA_INCOMPLETE", "ข้อมูลพืช แปลง ปริมาณ หรือหน่วยยังไม่ครบ");
+      const location=await repository.getStorageLocation(input.storageLocationId);
+      if (!location || location.status !== "ACTIVE") throw new HttpError(409,"STORAGE_LOCATION_INVALID","กรุณาเลือกสถานที่จัดเก็บที่เปิดใช้งาน");
       const now = new Date().toISOString();
-      const lot = { lotId:createId("LOT"), activityId:activity.activityId, farmerId:activity.farmerId, farmerName:activity.farmerName, plotName:activity.plotName, crop:activity.crop, quantity:activity.harvestAmount, unit:activity.harvestUnit, harvestDate:activity.occurredAt.slice(0,10), inventoryStatus:"IN_STOCK" as const, traceToken:createTraceToken(), createdAt:now, updatedAt:now };
+      const lot = { lotId:createId("LOT"), activityId:activity.activityId, farmerId:activity.farmerId, farmerName:activity.farmerName, plotName:activity.plotName, crop:activity.crop, quantity:activity.harvestAmount, unit:activity.harvestUnit, harvestDate:activity.occurredAt.slice(0,10), inventoryStatus:"IN_STOCK" as const, traceToken:createTraceToken(), storageLocationId:location.locationId, storageLocationName:location.name, createdAt:now, updatedAt:now };
       await repository.saveLot(lot);
       const linkedActivity = { ...activity, createdLotId:lot.lotId, updatedAt:now };
       await repository.saveActivity(linkedActivity);
@@ -353,6 +373,19 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
       await repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"ACTIVITY", entityId:activity.activityId, actorId:request.user!.userId, action:"LINK_LOT", before:activity, after:linkedActivity, occurredAt:now });
       response.status(201).json({ lot });
     } catch (error) { next(error); }
+  });
+
+  app.patch("/api/lots/:lotId/storage", auth.requireUser, auth.requireRole("WAREHOUSE", "ADMIN"), async (request,response,next) => {
+    try {
+      const input=lotStorageSchema.parse(request.body); const before=await repository.getLot(request.params.lotId as string);
+      if(!before) throw new HttpError(404,"LOT_NOT_FOUND","ไม่พบล็อตที่ค้นหา");
+      const location=await repository.getStorageLocation(input.storageLocationId);
+      if(!location || location.status!=="ACTIVE") throw new HttpError(409,"STORAGE_LOCATION_INVALID","กรุณาเลือกสถานที่จัดเก็บที่เปิดใช้งาน");
+      const lot={...before,storageLocationId:location.locationId,storageLocationName:location.name,updatedAt:new Date().toISOString()};
+      await repository.saveLot(lot);
+      await repository.saveAuditEvent({auditId:createId("AUD"),entityType:"LOT",entityId:lot.lotId,actorId:request.user!.userId,action:"LOT_STORAGE_MOVED",reason:input.reason,before,after:lot,occurredAt:lot.updatedAt});
+      response.json({lot});
+    } catch(error){next(error);}
   });
 
   app.patch("/api/lots/:lotId/status", auth.requireUser, auth.requireRole("WAREHOUSE", "ADMIN"), async (request, response, next) => {

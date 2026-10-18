@@ -25,6 +25,7 @@ describe("HTTP API", () => {
     const now = new Date().toISOString();
     await repository.saveFarmer({ farmerId:"F-TEST", memberCode:"M-TEST", displayName:"ผู้ทดสอบ", status:"ACTIVE" });
     await repository.savePlot({ plotId:"P-TEST", farmerId:"F-TEST", name:"แปลงทดสอบ", crop:"พืชทดสอบ", status:"ACTIVE" });
+    await repository.saveStorageLocation({ locationId:"LOC-TEST", name:"คลังทดสอบ", locationType:"โกดัง", status:"ACTIVE", createdAt:now, updatedAt:now });
     await repository.saveActivity({ activityId:"ACT-TEST-001", sourceEventId:"event-test-001", farmerId:"F-TEST", farmerName:"ผู้ทดสอบ", plotName:"แปลงทดสอบ", crop:"พืชทดสอบ", activityType:"เก็บเกี่ยว", harvestAmount:12, harvestUnit:"กก.", occurredAt:now, receivedAt:now, transcript:"ทดสอบกิจกรรม", processingStatus:"NEEDS_REVIEW", riskStatus:"NEEDS_REVIEW", confidence:0.8, flagReasons:["ทดสอบ"], matchedTerms:[], updatedAt:now });
     await repository.saveLot({ lotId:"LOT-TEST-001", activityId:"ACT-TEST-001", farmerId:"F-TEST", farmerName:"ผู้ทดสอบ", plotName:"แปลงทดสอบ", crop:"พืชทดสอบ", quantity:1, unit:"กก.", harvestDate:now.slice(0,10), inventoryStatus:"IN_STOCK", traceToken:"trace-test-001", createdAt:now, updatedAt:now });
     app = createApp({ config: testConfig, repository });
@@ -148,7 +149,7 @@ describe("HTTP API", () => {
     const agent = request.agent(app);
     await agent.post("/api/auth/login").send({ email:"admin@example.com", password:"secure-test-password" });
     await agent.post("/api/activities/ACT-TEST-001/review").send({ decision:"APPROVE", reason:"ตรวจข้อมูลเก็บเกี่ยวครบถ้วนแล้ว" });
-    const created = await agent.post("/api/lots").send({ activityId:"ACT-TEST-001" });
+    const created = await agent.post("/api/lots").send({ activityId:"ACT-TEST-001", storageLocationId:"LOC-TEST" });
     assert.equal(created.status, 201);
     assert.equal(created.body.lot.inventoryStatus, "IN_STOCK");
     const trace = await request(app).get(`/api/trace/${created.body.lot.traceToken}`);
@@ -166,9 +167,23 @@ describe("HTTP API", () => {
     await agent.post("/api/auth/login").send({ email:"admin@example.com", password:"secure-test-password" });
     await agent.patch("/api/activities/ACT-TEST-001").send({ occurredAt:"2026-10-18T08:30:00+07:00", plotId:"P-TEST", crop:"พืชทดสอบ", activityType:"รดน้ำ", harvestAmount:12, harvestUnit:"กก.", reason:"ทดสอบกิจกรรมที่ไม่ใช่การเก็บเกี่ยว" });
     await agent.post("/api/activities/ACT-TEST-001/review").send({ decision:"APPROVE", reason:"ทดสอบอนุมัติรายการที่ไม่ใช่เก็บเกี่ยว" });
-    const response = await agent.post("/api/lots").send({ activityId:"ACT-TEST-001" });
+    const response = await agent.post("/api/lots").send({ activityId:"ACT-TEST-001", storageLocationId:"LOC-TEST" });
     assert.equal(response.status, 409);
     assert.equal(response.body.error.code, "NOT_HARVEST_ACTIVITY");
+  });
+
+  it("reuses registered storage locations and audits lot movement", async () => {
+    const agent=request.agent(app);
+    await agent.post("/api/auth/login").send({email:"admin@example.com",password:"secure-test-password"});
+    const created=await agent.post("/api/storage-locations").send({name:"ห้องเย็น 1",locationType:"ห้องเย็น",zone:"อาคาร A"});
+    assert.equal(created.status,201);
+    const duplicate=await agent.post("/api/storage-locations").send({name:"ห้องเย็น 1"});
+    assert.equal(duplicate.status,409);
+    const registry=await agent.get("/api/storage-locations");
+    assert.ok(registry.body.locations.some((item:{name:string})=>item.name==="ห้องเย็น 1"));
+    const moved=await agent.patch("/api/lots/LOT-TEST-001/storage").send({storageLocationId:created.body.location.locationId,reason:"ย้ายเข้าห้องเย็นเพื่อรักษาคุณภาพ"});
+    assert.equal(moved.status,200);
+    assert.equal(moved.body.lot.storageLocationName,"ห้องเย็น 1");
   });
 
   it("exposes only privacy-safe trace fields", async () => {

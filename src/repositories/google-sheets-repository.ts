@@ -1,6 +1,6 @@
 import { google, sheets_v4 } from "googleapis";
 import type { AppConfig } from "../config.js";
-import type { Activity, AuditEvent, Farmer, Lot, OutboxMessage, Plot, Review } from "../domain/types.js";
+import type { Activity, AuditEvent, Farmer, Lot, OutboxMessage, Plot, Review, StorageLocation } from "../domain/types.js";
 import type { ActivityFilters, Repository } from "./repository.js";
 
 const TABLES = {
@@ -8,7 +8,8 @@ const TABLES = {
   Plots: ["plot_id", "farmer_id", "name", "crop", "status", "area_rai", "gps_lat", "gps_lng", "certification_status", "conversion_started_at", "conversion_ends_at", "previous_chemical_use", "estimated_yield", "estimated_yield_unit"],
   Activities: ["activity_id", "source_event_id", "source_event_ids", "farmer_id", "farmer_name", "plot_id", "plot_name", "crop", "occurred_at", "received_at", "transcript", "audio_content_id", "activity_type", "inputs_used", "harvest_amount", "harvest_unit", "processing_status", "risk_status", "confidence", "flag_reasons", "matched_terms", "created_lot_id", "revision", "correction_requested_at", "updated_at"],
   Reviews: ["review_id", "activity_id", "reviewer_id", "decision", "reason", "reviewed_at"],
-  Lots: ["lot_id", "activity_id", "farmer_id", "farmer_name", "plot_name", "crop", "quantity", "unit", "harvest_date", "inventory_status", "trace_token", "created_at", "updated_at"],
+  Lots: ["lot_id", "activity_id", "farmer_id", "farmer_name", "plot_name", "crop", "quantity", "unit", "harvest_date", "inventory_status", "trace_token", "storage_location_id", "storage_location_name", "created_at", "updated_at"],
+  StorageLocations: ["location_id", "name", "location_type", "address", "zone", "status", "created_at", "updated_at"],
   AuditEvents: ["audit_id", "entity_type", "entity_id", "actor_id", "action", "reason", "before", "after", "occurred_at"],
   Outbox: ["message_id", "channel", "recipient", "body", "line_message", "related_entity_id", "status", "attempts", "max_attempts", "next_attempt_at", "last_error", "created_at", "updated_at"]
 } as const;
@@ -108,6 +109,9 @@ export class GoogleSheetsRepository implements Repository {
   async getLot(id: string) { return (await this.listLots()).find((x) => x.lotId === id); }
   async getLotByTraceToken(token: string) { return (await this.listLots()).find((x) => x.traceToken === token); }
   async saveLot(x: Lot) { await this.upsert("Lots", "lot_id", x.lotId, mapKeys(x)); }
+  async listStorageLocations() { return (await this.rows("StorageLocations")).map(storageLocationFromRow).sort((a,b) => a.name.localeCompare(b.name,"th")); }
+  async getStorageLocation(id: string) { return (await this.listStorageLocations()).find((x) => x.locationId === id); }
+  async saveStorageLocation(x: StorageLocation) { await this.upsert("StorageLocations", "location_id", x.locationId, mapKeys(x)); }
   async getFarmerByLineUserId(id: string) { return (await this.rows("Farmers")).map(farmerFromRow).find((x) => x.lineUserId === id && x.status === "ACTIVE"); }
   async getFarmerByMemberCode(code: string) { return (await this.rows("Farmers")).map(farmerFromRow).find((x) => x.memberCode.toLowerCase() === code.toLowerCase() && x.status === "ACTIVE"); }
   async listFarmers() { return (await this.rows("Farmers")).map(farmerFromRow).sort((a, b) => a.memberCode.localeCompare(b.memberCode)); }
@@ -136,6 +140,7 @@ function plotFromRow(r: Row): Plot { return { plotId:r.plot_id!, farmerId:r.farm
 function activityFromRow(r: Row): Activity { return { activityId:r.activity_id!,sourceEventId:r.source_event_id!,...(r.source_event_ids?{sourceEventIds:json(r.source_event_ids,[])}:{}),farmerId:r.farmer_id!,farmerName:r.farmer_name!,...(r.plot_id?{plotId:r.plot_id}:{}),...(r.plot_name?{plotName:r.plot_name}:{}),...(r.crop?{crop:r.crop}:{}),occurredAt:r.occurred_at!,receivedAt:r.received_at!,...(r.transcript?{transcript:r.transcript}:{}),...(r.audio_content_id?{audioContentId:r.audio_content_id}:{}),...(r.activity_type?{activityType:r.activity_type}:{}),...(r.inputs_used?{inputsUsed:r.inputs_used}:{}),...(num(r.harvest_amount!)!==undefined?{harvestAmount:num(r.harvest_amount!)!}:{}),...(r.harvest_unit?{harvestUnit:r.harvest_unit}:{}),processingStatus:r.processing_status as Activity["processingStatus"],riskStatus:r.risk_status as Activity["riskStatus"],confidence:Number(r.confidence||0),flagReasons:json(r.flag_reasons!,[]),matchedTerms:json(r.matched_terms!,[]),...(r.created_lot_id?{createdLotId:r.created_lot_id}:{}),revision:Number(r.revision||1),...(r.correction_requested_at?{correctionRequestedAt:r.correction_requested_at}:{}),updatedAt:r.updated_at! }; }
 function activityToRow(x: Activity) { return mapKeys(x); }
 function reviewFromRow(r: Row): Review { return { reviewId:r.review_id!,activityId:r.activity_id!,reviewerId:r.reviewer_id!,decision:r.decision as Review["decision"],reason:r.reason!,reviewedAt:r.reviewed_at! }; }
-function lotFromRow(r: Row): Lot { return { lotId:r.lot_id!,activityId:r.activity_id!,farmerId:r.farmer_id!,farmerName:r.farmer_name!,plotName:r.plot_name!,crop:r.crop!,quantity:Number(r.quantity),unit:r.unit!,harvestDate:r.harvest_date!,inventoryStatus:r.inventory_status as Lot["inventoryStatus"],traceToken:r.trace_token!,createdAt:r.created_at!,updatedAt:r.updated_at! }; }
+function lotFromRow(r: Row): Lot { return { lotId:r.lot_id!,activityId:r.activity_id!,farmerId:r.farmer_id!,farmerName:r.farmer_name!,plotName:r.plot_name!,crop:r.crop!,quantity:Number(r.quantity),unit:r.unit!,harvestDate:r.harvest_date!,inventoryStatus:r.inventory_status as Lot["inventoryStatus"],traceToken:r.trace_token!,...(r.storage_location_id?{storageLocationId:r.storage_location_id}:{}),...(r.storage_location_name?{storageLocationName:r.storage_location_name}:{}),createdAt:r.created_at!,updatedAt:r.updated_at! }; }
+function storageLocationFromRow(r: Row): StorageLocation { return { locationId:r.location_id!,name:r.name!,...(r.location_type?{locationType:r.location_type}:{}),...(r.address?{address:r.address}:{}),...(r.zone?{zone:r.zone}:{}),status:r.status === "INACTIVE" ? "INACTIVE" : "ACTIVE",createdAt:r.created_at!,updatedAt:r.updated_at! }; }
 function auditFromRow(r: Row): AuditEvent { return { auditId:r.audit_id!,entityType:r.entity_type as AuditEvent["entityType"],entityId:r.entity_id!,actorId:r.actor_id!,action:r.action!,...(r.reason?{reason:r.reason}:{}),...(r.before?{before:json(r.before,null)}:{}),...(r.after?{after:json(r.after,null)}:{}),occurredAt:r.occurred_at! }; }
 function outboxFromRow(r: Row): OutboxMessage { return { messageId:r.message_id!, channel:"LINE", recipient:r.recipient!, body:r.body!, ...(r.line_message?{lineMessage:json<Record<string,unknown>>(r.line_message,{})}:{}), ...(r.related_entity_id?{relatedEntityId:r.related_entity_id}:{}), status:r.status as OutboxMessage["status"], attempts:Number(r.attempts||0), maxAttempts:Number(r.max_attempts||5), nextAttemptAt:r.next_attempt_at!, ...(r.last_error?{lastError:r.last_error}:{}), createdAt:r.created_at!, updatedAt:r.updated_at! }; }

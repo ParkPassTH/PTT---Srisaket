@@ -77,6 +77,7 @@
 - [x] T-405 lot dashboard/detail — สร้างล็อต ดูสถานะ และเปลี่ยนสถานะ — F-020
 - [x] T-406 public trace page — privacy-safe UI พร้อม invalid/void/recall states — F-021
 - [x] T-407 recall/void scenarios — terminal states พร้อม audit — F-108
+- [x] T-408 storage location registry/assignment/movement — Google Sheets, reusable selection และ audit — F-034
 
 ## Phase 5 — Operations และ Deployment
 

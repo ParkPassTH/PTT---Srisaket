@@ -128,11 +128,24 @@ export interface Lot {
   traceToken: string;
   createdAt: string;
   updatedAt: string;
+  storageLocationId?: string;
+  storageLocationName?: string;
+}
+
+export interface StorageLocation {
+  locationId: string;
+  name: string;
+  locationType?: string;
+  address?: string;
+  zone?: string;
+  status: "ACTIVE" | "INACTIVE";
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AuditEvent {
   auditId: string;
-  entityType: "ACTIVITY" | "LOT" | "FARMER" | "PLOT" | "REPORT" | "USER" | "RULE" | "OUTBOX";
+  entityType: "ACTIVITY" | "LOT" | "FARMER" | "PLOT" | "STORAGE_LOCATION" | "REPORT" | "USER" | "RULE" | "OUTBOX";
   entityId: string;
   actorId: string;
   action: string;
