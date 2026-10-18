@@ -257,5 +257,6 @@
 - retry งานที่ถึงเวลาแบบ opportunistic เมื่อ LINE webhook ถัดไปเข้ามา
 - เพิ่ม Admin API และหน้า Dashboard สำหรับดูจำนวนค้าง ลองส่งงานที่ถึงเวลา และกู้ข้อความรายรายการ
 - เพิ่ม `/ready` เพื่อตรวจ data store และความครบถ้วนของ LINE/AI configuration โดยไม่เปิดเผย secret
+- เพิ่ม Vercel rewrite สำหรับ `/ready` เพื่อไม่ให้ SPA fallback รับ route นี้แทน backend
 - เพิ่ม audit snapshot เมื่อ Admin สั่ง process/retry คิว
 - เพิ่ม automated tests กรณีส่งล้มเหลว ส่งซ้ำสำเร็จโดยไม่สร้างรายการซ้ำ และเข้าสู่ dead letter
