@@ -23,6 +23,8 @@ describe("HTTP API", () => {
   beforeEach(async () => {
     const repository = new MemoryRepository();
     const now = new Date().toISOString();
+    await repository.saveFarmer({ farmerId:"F-TEST", memberCode:"M-TEST", displayName:"ผู้ทดสอบ", status:"ACTIVE" });
+    await repository.savePlot({ plotId:"P-TEST", farmerId:"F-TEST", name:"แปลงทดสอบ", crop:"พืชทดสอบ", status:"ACTIVE" });
     await repository.saveActivity({ activityId:"ACT-TEST-001", sourceEventId:"event-test-001", farmerId:"F-TEST", farmerName:"ผู้ทดสอบ", plotName:"แปลงทดสอบ", crop:"พืชทดสอบ", activityType:"เก็บเกี่ยว", harvestAmount:12, harvestUnit:"กก.", occurredAt:now, receivedAt:now, transcript:"ทดสอบกิจกรรม", processingStatus:"NEEDS_REVIEW", riskStatus:"NEEDS_REVIEW", confidence:0.8, flagReasons:["ทดสอบ"], matchedTerms:[], updatedAt:now });
     await repository.saveLot({ lotId:"LOT-TEST-001", activityId:"ACT-TEST-001", farmerId:"F-TEST", farmerName:"ผู้ทดสอบ", plotName:"แปลงทดสอบ", crop:"พืชทดสอบ", quantity:1, unit:"กก.", harvestDate:now.slice(0,10), inventoryStatus:"IN_STOCK", traceToken:"trace-test-001", createdAt:now, updatedAt:now });
     app = createApp({ config: testConfig, repository });
@@ -93,8 +95,8 @@ describe("HTTP API", () => {
     const plotResponse = await agent.post("/api/plots").send({ farmerId:farmerResponse.body.farmer.farmerId, name:"แปลงเหนือ", crop:"หอมแดง" });
     assert.equal(plotResponse.status, 201);
     const registry = await agent.get("/api/farmers");
-    assert.equal(registry.body.farmers.length, 1);
-    assert.equal(registry.body.plots[0].crop, "หอมแดง");
+    assert.equal(registry.body.farmers.length, 2);
+    assert.ok(registry.body.plots.some((plot: { crop:string }) => plot.crop === "หอมแดง"));
   });
 
   it("reports integration readiness without exposing secrets", async () => {
@@ -105,6 +107,18 @@ describe("HTTP API", () => {
     assert.equal(response.body.dataStore.provider, "memory");
     assert.equal(response.body.ai.provider, "gemini");
     assert.equal(JSON.stringify(response.body).includes("gemini-test"), false);
+  });
+
+  it("corrects extracted activity fields with before/after audit snapshots", async () => {
+    const agent = request.agent(app);
+    await agent.post("/api/auth/login").send({ email:"admin@example.com", password:"secure-test-password" });
+    const corrected = await agent.patch("/api/activities/ACT-TEST-001").send({ occurredAt:"2026-10-18T08:30:00+07:00", plotId:"P-TEST", crop:"พืชทดสอบ", activityType:"รดน้ำ", inputsUsed:"น้ำหมักสูตร 1", reason:"ยืนยันจากสมุดบันทึกประจำแปลง" });
+    assert.equal(corrected.status, 200);
+    assert.equal(corrected.body.activity.plotId, "P-TEST");
+    const detail = await agent.get("/api/activities/ACT-TEST-001");
+    const correction = detail.body.audit.find((event: { action:string }) => event.action === "MANUAL_CORRECTION");
+    assert.equal(correction.before.activityType, "เก็บเกี่ยว");
+    assert.equal(correction.after.activityType, "รดน้ำ");
   });
 
   it("creates a traceable lot from an approved harvest and exports CSV", async () => {

@@ -33,6 +33,10 @@ export interface Farmer {
   displayName: string;
   lineUserId?: string;
   status: "ACTIVE" | "INACTIVE";
+  address?: string;
+  phone?: string;
+  registeredAt?: string;
+  totalAreaRai?: number;
 }
 
 export interface Plot {
@@ -41,6 +45,15 @@ export interface Plot {
   name: string;
   crop: string;
   status: "ACTIVE" | "INACTIVE";
+  areaRai?: number;
+  gpsLat?: number;
+  gpsLng?: number;
+  certificationStatus?: "ORGANIC" | "CONVERSION" | "CONVENTIONAL";
+  conversionStartedAt?: string;
+  conversionEndsAt?: string;
+  previousChemicalUse?: string;
+  estimatedYield?: number;
+  estimatedYieldUnit?: string;
 }
 
 export interface ExtractedActivity {
@@ -65,6 +78,7 @@ export interface RuleResult {
 export interface Activity {
   activityId: string;
   sourceEventId: string;
+  sourceEventIds?: string[];
   farmerId: string;
   farmerName: string;
   plotId?: string;

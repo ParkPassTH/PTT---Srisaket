@@ -13,6 +13,8 @@ import { createVoiceAnalyzer } from "./services/gemini-service.js";
 import { ReviewService } from "./services/review-service.js";
 import { HttpError } from "./lib/http-error.js";
 import { createId, createTraceToken } from "./lib/ids.js";
+import { evaluateIcsRisk } from "./domain/ics-rules.js";
+import type { Farmer, Plot } from "./domain/types.js";
 
 const loginSchema = z.object({ email: z.string().email(), password: z.string().min(8) });
 const reviewSchema = z.object({
@@ -22,16 +24,21 @@ const reviewSchema = z.object({
 const farmerSchema = z.object({
   memberCode: z.string().trim().min(2).max(30).regex(/^[A-Za-z0-9_-]+$/, "รหัสสมาชิกใช้ได้เฉพาะตัวอักษร ตัวเลข _ และ -"),
   displayName: z.string().trim().min(2).max(120),
-  status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE")
+  status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"), address:z.string().trim().max(300).optional(), phone:z.string().trim().max(30).optional(), registeredAt:z.string().date().optional(), totalAreaRai:z.coerce.number().nonnegative().optional()
 });
 const plotSchema = z.object({
   farmerId: z.string().trim().min(1),
   name: z.string().trim().min(1).max(120),
   crop: z.string().trim().min(1).max(120),
-  status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE")
+  status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"), areaRai:z.coerce.number().nonnegative().optional(), gpsLat:z.coerce.number().min(-90).max(90).optional(), gpsLng:z.coerce.number().min(-180).max(180).optional(), certificationStatus:z.enum(["ORGANIC", "CONVERSION", "CONVENTIONAL"]).optional(), conversionStartedAt:z.string().date().optional(), conversionEndsAt:z.string().date().optional(), previousChemicalUse:z.string().trim().max(500).optional(), estimatedYield:z.coerce.number().nonnegative().optional(), estimatedYieldUnit:z.string().trim().max(30).optional()
 });
 const lotCreateSchema = z.object({ activityId:z.string().trim().min(1) });
 const lotStatusSchema = z.object({ status:z.enum(["IN_STOCK", "RESERVED", "SHIPPED", "VOID", "RECALLED"]), reason:z.string().trim().min(5).max(500) });
+const activityCorrectionSchema = z.object({
+  occurredAt:z.string().datetime({ offset:true }), plotId:z.string().trim().min(1), crop:z.string().trim().min(1).max(120),
+  activityType:z.string().trim().min(1).max(120), inputsUsed:z.string().trim().max(300).optional(),
+  harvestAmount:z.coerce.number().nonnegative().optional(), harvestUnit:z.string().trim().max(30).optional(), reason:z.string().trim().min(5).max(500)
+});
 
 // Helmet publishes conditional ESM/CJS exports. Normalize the export explicitly
 // so TypeScript/Vercel and local Node builds agree on the callable middleware.
@@ -122,7 +129,7 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
     try {
       const input = farmerSchema.parse(request.body);
       if (await repository.getFarmerByMemberCode(input.memberCode)) throw new HttpError(409, "MEMBER_CODE_EXISTS", "รหัสสมาชิกนี้ถูกใช้งานแล้ว");
-      const farmer = { farmerId: createId("FARM"), ...input };
+      const farmer = { farmerId: createId("FARM"), ...defined(input) } as Farmer;
       await repository.saveFarmer(farmer);
       await repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"FARMER", entityId:farmer.farmerId, actorId:request.user!.userId, action:"CREATE", after:farmer, occurredAt:new Date().toISOString() });
       response.status(201).json({ farmer });
@@ -137,7 +144,7 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
       if (input.memberCode && input.memberCode.toLowerCase() !== before.memberCode.toLowerCase()) {
         if (await repository.getFarmerByMemberCode(input.memberCode)) throw new HttpError(409, "MEMBER_CODE_EXISTS", "รหัสสมาชิกนี้ถูกใช้งานแล้ว");
       }
-      const farmer = { ...before, memberCode:input.memberCode ?? before.memberCode, displayName:input.displayName ?? before.displayName, status:input.status ?? before.status };
+      const farmer = { ...before, ...defined(input), memberCode:input.memberCode ?? before.memberCode, displayName:input.displayName ?? before.displayName, status:input.status ?? before.status } as Farmer;
       await repository.saveFarmer(farmer);
       await repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"FARMER", entityId:farmer.farmerId, actorId:request.user!.userId, action:"UPDATE", before, after:farmer, occurredAt:new Date().toISOString() });
       response.json({ farmer });
@@ -148,7 +155,7 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
     try {
       const input = plotSchema.parse(request.body);
       if (!await repository.getFarmer(input.farmerId)) throw new HttpError(404, "FARMER_NOT_FOUND", "ไม่พบเกษตรกรเจ้าของแปลง");
-      const plot = { plotId:createId("PLOT"), ...input };
+      const plot = { plotId:createId("PLOT"), ...defined(input) } as Plot;
       await repository.savePlot(plot);
       await repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"PLOT", entityId:plot.plotId, actorId:request.user!.userId, action:"CREATE", after:plot, occurredAt:new Date().toISOString() });
       response.status(201).json({ plot });
@@ -161,7 +168,7 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
       if (!before) throw new HttpError(404, "PLOT_NOT_FOUND", "ไม่พบแปลงที่ค้นหา");
       const input = plotSchema.partial().parse(request.body);
       if (input.farmerId && !await repository.getFarmer(input.farmerId)) throw new HttpError(404, "FARMER_NOT_FOUND", "ไม่พบเกษตรกรเจ้าของแปลง");
-      const plot = { ...before, farmerId:input.farmerId ?? before.farmerId, name:input.name ?? before.name, crop:input.crop ?? before.crop, status:input.status ?? before.status };
+      const plot = { ...before, ...defined(input), farmerId:input.farmerId ?? before.farmerId, name:input.name ?? before.name, crop:input.crop ?? before.crop, status:input.status ?? before.status } as Plot;
       await repository.savePlot(plot);
       await repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"PLOT", entityId:plot.plotId, actorId:request.user!.userId, action:"UPDATE", before, after:plot, occurredAt:new Date().toISOString() });
       response.json({ plot });
@@ -226,7 +233,7 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
         if (input.decision === "REQUEST_INFO") {
           const farmer = await repository.getFarmer(activity.farmerId);
           if (farmer?.lineUserId) {
-            try { await pushLineText(config, farmer.lineUserId, `เจ้าหน้าที่ขอข้อมูลเพิ่มสำหรับรายการ ${activity.activityId}\nรายละเอียด: ${input.reason}\nกรุณาส่งข้อความเสียงใหม่ โดยบอกเลขที่รายการนี้ก่อนเริ่มพูด`); notificationSent = true; }
+            try { await pushLineText(config, farmer.lineUserId, `ขอข้อมูลเพิ่มสำหรับรายการ ${activity.activityId}\nรายละเอียด: ${input.reason}\nส่งเสียงตอบได้เลย ระบบจะเติมข้อมูลในรายการเดิมให้อัตโนมัติ ไม่สร้างรายการใหม่`); notificationSent = true; }
             catch (error) { console.error(JSON.stringify({ level:"error", code:"LINE_PUSH_FAILED", activityId:activity.activityId, message:error instanceof Error ? error.message : String(error) })); }
           }
         }
@@ -236,6 +243,29 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
       }
     }
   );
+
+  app.patch("/api/activities/:activityId", auth.requireUser, auth.requireRole("REVIEWER", "ADMIN"), async (request, response, next) => {
+    try {
+      const input = activityCorrectionSchema.parse(request.body);
+      const before = await repository.getActivity(request.params.activityId as string);
+      if (!before) throw new HttpError(404, "ACTIVITY_NOT_FOUND", "ไม่พบกิจกรรมที่ต้องการแก้ไข");
+      const plot = await repository.getPlot(input.plotId);
+      if (!plot || plot.farmerId !== before.farmerId) throw new HttpError(409, "PLOT_NOT_OWNED", "แปลงนี้ไม่ได้อยู่ในทะเบียนของเกษตรกรรายนี้");
+      const extracted = { plotId:input.plotId, crop:input.crop, activityType:input.activityType, ...(input.inputsUsed ? { inputsUsed:input.inputsUsed } : {}), ...(input.harvestAmount !== undefined ? { harvestAmount:input.harvestAmount } : {}), ...(input.harvestUnit ? { harvestUnit:input.harvestUnit } : {}), isHarvesting:input.harvestAmount !== undefined, fieldConfidence:{ plotId:1, crop:1, activityType:1, inputsUsed:1 } };
+      const rule = evaluateIcsRisk(extracted, `${before.transcript ?? ""} ${input.inputsUsed ?? ""}`);
+      if (input.crop.trim().toLocaleLowerCase("th-TH") !== plot.crop.trim().toLocaleLowerCase("th-TH")) { rule.riskStatus="NEEDS_REVIEW"; rule.reasons.push(`พืชที่แก้ไข “${input.crop}” ไม่ตรงกับทะเบียนแปลง “${plot.crop}”`); }
+      const { inputsUsed: _oldInputs, harvestAmount: _oldAmount, harvestUnit: _oldUnit, ...baseActivity } = before;
+      const activity = { ...baseActivity, occurredAt:input.occurredAt, plotId:input.plotId, plotName:plot.name, crop:input.crop, activityType:input.activityType, ...(input.inputsUsed ? { inputsUsed:input.inputsUsed } : {}), ...(input.harvestAmount !== undefined ? { harvestAmount:input.harvestAmount } : {}), ...(input.harvestUnit ? { harvestUnit:input.harvestUnit } : {}), riskStatus:rule.riskStatus, processingStatus:"NEEDS_REVIEW" as const, confidence:1, flagReasons:rule.reasons, matchedTerms:rule.matchedTerms, updatedAt:new Date().toISOString() };
+      await repository.saveActivity(activity);
+      await repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"ACTIVITY", entityId:activity.activityId, actorId:request.user!.userId, action:"MANUAL_CORRECTION", reason:input.reason, before, after:activity, occurredAt:activity.updatedAt });
+      response.json({ activity });
+    } catch (error) { next(error); }
+  });
+
+  app.post("/api/activities/:activityId/retry", auth.requireUser, auth.requireRole("REVIEWER", "ADMIN"), async (request, response, next) => {
+    try { response.json({ activity:await lineService.retryActivity(request.params.activityId as string, request.user!.userId) }); }
+    catch (error) { next(error); }
+  });
 
   app.get("/api/lots", auth.requireUser, async (_request, response, next) => {
     try {
@@ -346,3 +376,5 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
 
   return app;
 }
+
+function defined<T extends Record<string, unknown>>(value: T) { return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as Partial<T>; }

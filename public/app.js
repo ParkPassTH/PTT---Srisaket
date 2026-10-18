@@ -252,7 +252,8 @@ async function openActivity(activityId) {
   $("#main-content").inert = true;
   $(".mobile-header").inert = true;
   try {
-    const data = await api(`/api/activities/${encodeURIComponent(activityId)}`);
+    const [data, registry] = await Promise.all([api(`/api/activities/${encodeURIComponent(activityId)}`), api("/api/farmers")]);
+    state.farmers = registry.farmers; state.plots = registry.plots;
     state.selectedActivity = data.activity;
     renderDrawer(data);
     $("#drawer-close").focus();
@@ -262,12 +263,16 @@ async function openActivity(activityId) {
 }
 
 function renderDrawer({ activity, reviews, audit }) {
+  const farmerPlots = state.plots.filter((plot) => plot.farmerId === activity.farmerId && plot.status === "ACTIVE");
+  const localDateTime = new Date(activity.occurredAt).toLocaleString("sv-SE", { timeZone:"Asia/Bangkok" }).slice(0,16).replace(" ", "T");
   $("#drawer-title").textContent = `${activity.farmerName} · ${activity.plotName || "ไม่ระบุแปลง"}`;
   $("#drawer-content").innerHTML = `
     <section class="evidence-block"><h3>ข้อความที่ระบบถอดได้</h3><p class="transcript">“${escapeHtml(activity.transcript || "ยังไม่มีข้อความถอดเสียง") }”</p></section>
     <section class="evidence-block"><h3>ข้อมูลที่สกัดได้</h3><dl class="evidence-grid"><dt>รหัสรายการ</dt><dd>${escapeHtml(activity.activityId)}</dd><dt>พืช</dt><dd>${escapeHtml(activity.crop || "ไม่ระบุ")}</dd><dt>กิจกรรม</dt><dd>${escapeHtml(activity.activityType || "ไม่ระบุ")}</dd><dt>สิ่งที่ใช้</dt><dd>${escapeHtml(activity.inputsUsed || "ไม่ระบุ")}</dd><dt>ความมั่นใจ</dt><dd>${Math.round(activity.confidence * 100)}%</dd><dt>สถานะ</dt><dd>${statusBadge(activity.riskStatus)}</dd></dl></section>
     <section class="evidence-block"><h3>เหตุผลที่ต้องตรวจ</h3>${activity.flagReasons.length ? `<ul class="reason-list">${activity.flagReasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>` : `<p>ไม่พบเหตุผลแจ้งเตือนเพิ่มเติม</p>`}</section>
     <section class="evidence-block"><h3>ประวัติการดำเนินการ</h3><p>${reviews.length} ผลการตรวจ · ${audit.length} เหตุการณ์ใน audit trail</p></section>
+    ${activity.processingStatus === "FAILED_RETRYABLE" ? `<section class="evidence-block retry-block"><h3>ประมวลผลไม่สำเร็จ</h3><p>${escapeHtml(activity.flagReasons[0] || "เกิดข้อผิดพลาดชั่วคราว")}</p><button id="retry-activity" class="button secondary-button" type="button">ประมวลผลไฟล์เสียงเดิมอีกครั้ง</button></section>` : ""}
+    <form id="correction-form" class="review-form correction-form"><h3>แก้ไขข้อมูลที่สกัด</h3><div class="correction-grid"><label>วันและเวลาที่ทำ<input name="occurredAt" type="datetime-local" value="${escapeHtml(localDateTime)}" required></label><label>แปลง<select name="plotId" required><option value="">เลือกแปลง</option>${farmerPlots.map((plot) => `<option value="${escapeHtml(plot.plotId)}" ${plot.plotId === activity.plotId ? "selected" : ""}>${escapeHtml(plot.name)} · ${escapeHtml(plot.crop)}</option>`).join("")}</select></label><label>พืช<input name="crop" value="${escapeHtml(activity.crop || "")}" required></label><label>กิจกรรม<input name="activityType" value="${escapeHtml(activity.activityType || "")}" required></label><label class="full-field">ปัจจัยการผลิต<input name="inputsUsed" value="${escapeHtml(activity.inputsUsed || "")}"></label><label>ปริมาณเก็บเกี่ยว<input name="harvestAmount" type="number" min="0" step="any" value="${activity.harvestAmount ?? ""}"></label><label>หน่วย<input name="harvestUnit" value="${escapeHtml(activity.harvestUnit || "")}"></label><label class="full-field">เหตุผลที่แก้ไข<textarea name="reason" required minlength="5" maxlength="500" placeholder="อธิบายหลักฐานที่ใช้แก้ไข"></textarea></label></div><button class="button secondary-button" type="submit">บันทึกการแก้ไขและ Snapshot</button></form>
     <form id="review-form" class="review-form"><label for="review-reason"><strong>เหตุผลการดำเนินการ</strong></label><textarea id="review-reason" name="reason" required minlength="5" maxlength="500" placeholder="อธิบายสิ่งที่ตรวจพบหรือข้อมูลที่ต้องขอเพิ่ม"></textarea><div class="decision-row"><button type="submit" name="decision" value="REQUEST_INFO" class="decision-button">ขอข้อมูลเพิ่ม</button><button type="submit" name="decision" value="FLAG" class="decision-button flag">ยืนยันความเสี่ยง</button><button type="submit" name="decision" value="APPROVE" class="decision-button primary">อนุมัติรายการ</button></div></form>`;
 }
 
@@ -372,8 +377,17 @@ $("#entity-form").addEventListener("submit", async (event) => {
 $("#activity-search").addEventListener("input", () => { clearTimeout(filterActivities.timer); filterActivities.timer = setTimeout(filterActivities, 250); });
 $("#risk-filter").addEventListener("change", filterActivities);
 $("#review-drawer").addEventListener("submit", async (event) => {
-  if (event.target.id !== "review-form") return;
   event.preventDefault();
+  if (event.target.id === "correction-form") {
+    const body = Object.fromEntries(new FormData(event.target));
+    body.occurredAt = new Date(body.occurredAt).toISOString();
+    if (!body.harvestAmount) delete body.harvestAmount;
+    if (!body.harvestUnit) delete body.harvestUnit;
+    try { await api(`/api/activities/${encodeURIComponent(state.selectedActivity.activityId)}`, { method:"PATCH", body:JSON.stringify(body) }); showToast("บันทึกการแก้ไขและ Snapshot แล้ว"); closeDrawer(); await loadDashboard(); }
+    catch (error) { showToast(error.message); }
+    return;
+  }
+  if (event.target.id !== "review-form") return;
   const submitter = event.submitter;
   const reason = new FormData(event.target).get("reason");
   try {
@@ -382,6 +396,12 @@ $("#review-drawer").addEventListener("submit", async (event) => {
     closeDrawer();
     await loadDashboard();
   } catch (error) { showToast(error.message); }
+});
+$("#review-drawer").addEventListener("click", async (event) => {
+  if (event.target.id !== "retry-activity") return;
+  event.target.disabled = true;
+  try { await api(`/api/activities/${encodeURIComponent(state.selectedActivity.activityId)}/retry`, { method:"POST" }); showToast("ประมวลผลไฟล์เสียงเดิมสำเร็จ"); closeDrawer(); await loadDashboard(); }
+  catch (error) { showToast(error.message); event.target.disabled = false; }
 });
 
 async function showPublicTrace() {

@@ -50,6 +50,8 @@
 | F-029 | Automated tests และ CI | Developer | In Progress | tests/build พร้อม; รอ hosted CI workflow |
 | F-030 | Free-tier deployment guide | Developer/Admin | In Progress | Render guide/blueprint พร้อม; รอ deploy จริงและ verify |
 | F-031 | Backup/export และ restore drill | Admin | Planned | export ได้และมีขั้นตอนทดสอบ restore |
+| F-032 | ต่อบทสนทนาในกิจกรรมเดิม | เกษตรกร | Implemented | หลังเจ้าหน้าที่ขอข้อมูล เสียงถัดไปเติม activity เดิมและเก็บ source event ทุกครั้ง |
+| F-033 | จับคู่แปลงอัตโนมัติจากทะเบียน | เกษตรกร/ICS | Implemented | รองรับรหัส ชื่อ “แปลง 1/แปลงหนึ่ง” และเลือกแปลงเดียวอัตโนมัติ พร้อมเติมพืชจากทะเบียน |
 
 ## P1 — ควรมีหลังแกนหลักเสถียร
 
@@ -93,3 +95,4 @@
 | 18 ต.ค. 2569 | ลบข้อมูล mock ออกจาก runtime และเพิ่ม empty state/ป้ายแหล่งข้อมูล | Dashboard แสดงเฉพาะข้อมูลจริงจาก repository; test fixtures อยู่เฉพาะใน tests | Codex |
 | 17 ต.ค. 2569 | เพิ่มคู่มือ integration แบบแบ่ง Gate A–D โดยไม่เปลี่ยนขอบเขตฟีเจอร์ | ทำให้แยกสถานะ memory demo ออกจาก Sheets/LINE/OpenAI จริงและทดสอบระดับถัดไปได้ | Codex |
 | 18 ต.ค. 2569 | เพิ่ม Gemini เป็นทางเลือก Gate C ผ่าน provider abstraction | ลด vendor lock-in; Gemini รองรับ audio transcription และ structured output แต่ยังไม่ implement adapter | Codex |
+| 18 ต.ค. 2569 | เพิ่มการต่อบทสนทนาในรายการเดิมและจับคู่แปลงอัตโนมัติ | ลดรายการซ้ำและไม่ถามข้อมูลที่มีอยู่แล้วในทะเบียน | Codex |

@@ -238,3 +238,13 @@
 - เพิ่ม snapshot ฝั่ง Activity เมื่อเชื่อมกับล็อต
 - เพิ่มการตรวจ ownership/status ของแปลงและตรวจพืชจากเสียงเทียบกับทะเบียนแปลง
 - เพิ่ม `docs/ICS_RECORDING_GUIDE.md` เป็น checklist เบื้องต้น โดยรอผู้จัดการ ICS/หน่วยรับรองอนุมัติกฎจริง
+
+## 2026-10-18 — Conversation continuity and automatic plot resolution
+
+- ตรวจพบว่าระบบเดิมทำ idempotency ได้เฉพาะ webhook ซ้ำ แต่เสียงตอบคำถามเป็น event ใหม่จึงสร้าง activity ใหม่
+- เปลี่ยนเสียงถัดไปของเกษตรกรที่มีรายการ `AWAITING_FARMER` ให้เติม activity เดิม โดยคง `activity_id` เดิม
+- เพิ่ม `source_event_ids` เพื่อกัน webhook ซ้ำทุกช่วงของบทสนทนา และเพิ่ม audit `FOLLOWUP_VOICE_RECEIVED` / `FOLLOWUP_MERGED`
+- เพิ่มการจับคู่แปลงจากรหัส ชื่อ รูปแบบเลขไทยพูดเป็นคำ และกรณีมีแปลงใช้งานเพียงแปลงเดียว
+- เติมพืชจากทะเบียนอัตโนมัติก่อนตรวจ required fields เมื่อเสียงไม่ได้พูดพืช ลดคำถามที่ไม่จำเป็น
+- ปรับข้อความขอข้อมูลเพิ่มให้เกษตรกรส่งเสียงตอบได้ทันที ไม่ต้องพูด Activity ID
+- เพิ่ม regression tests สำหรับ `แปลง 1` ↔ `แปลงหนึ่ง` และการรวม follow-up; test ผ่าน 19/19

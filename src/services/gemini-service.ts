@@ -10,6 +10,7 @@ const confidenceValue = z.preprocess((value) => {
 
 const outputSchema = z.object({
   transcript: z.string().min(1),
+  occurredAt: z.string().datetime({ offset:true }).nullable(),
   plotId: z.string().nullable(),
   plotName: z.string().nullable(),
   crop: z.string().nullable(),
@@ -30,6 +31,7 @@ const outputSchema = z.object({
 
 export interface VoiceAnalysis {
   transcript: string;
+  occurredAt?: string;
   plotName?: string;
   extracted: ExtractedActivity;
 }
@@ -49,7 +51,7 @@ export class GeminiService implements VoiceAnalyzer {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [
-          { text: "ถอดเสียงภาษาไทยตามคำพูดจริง แล้วแยกข้อมูลกิจกรรมเกษตร ห้ามเดาข้อมูลที่ไม่ได้พูด ค่าไม่ทราบให้เป็น null ความมั่นใจแต่ละช่องต้องเป็นเลขทศนิยม 0 ถึง 1 เท่านั้น เช่น 0.85 ห้ามใช้เปอร์เซ็นต์ 85" },
+          { text: `ถอดเสียงภาษาไทยตามคำพูดจริง แล้วแยกข้อมูลกิจกรรมเกษตร ห้ามเดาข้อมูลที่ไม่ได้พูด ค่าไม่ทราบให้เป็น null เวลาปัจจุบันในประเทศไทยคือ ${new Date().toLocaleString("sv-SE", { timeZone:"Asia/Bangkok" })}+07:00 ให้แปลงคำเวลาเช่น เมื่อเช้า/เมื่อวานเป็น occurredAt แบบ ISO 8601 หากระบุไม่ได้ให้ null ความมั่นใจแต่ละช่องต้องเป็นเลขทศนิยม 0 ถึง 1 เท่านั้น เช่น 0.85 ห้ามใช้เปอร์เซ็นต์ 85` },
           { inlineData: { mimeType, data: audio.toString("base64") } }
         ] }],
         generationConfig: {
@@ -57,9 +59,9 @@ export class GeminiService implements VoiceAnalyzer {
           responseMimeType: "application/json",
           responseSchema: {
             type: "OBJECT",
-            required: ["transcript", "plotId", "plotName", "crop", "activityType", "inputsUsed", "harvestAmount", "harvestUnit", "isHarvesting", "fieldConfidence"],
+            required: ["transcript", "occurredAt", "plotId", "plotName", "crop", "activityType", "inputsUsed", "harvestAmount", "harvestUnit", "isHarvesting", "fieldConfidence"],
             properties: {
-              transcript: { type: "STRING" }, plotId: { type: "STRING", nullable: true }, plotName: { type: "STRING", nullable: true }, crop: { type: "STRING", nullable: true }, activityType: { type: "STRING", nullable: true }, inputsUsed: { type: "STRING", nullable: true }, harvestAmount: { type: "NUMBER", nullable: true }, harvestUnit: { type: "STRING", nullable: true }, isHarvesting: { type: "BOOLEAN" },
+              transcript: { type: "STRING" }, occurredAt: { type:"STRING", nullable:true }, plotId: { type: "STRING", nullable: true }, plotName: { type: "STRING", nullable: true }, crop: { type: "STRING", nullable: true }, activityType: { type: "STRING", nullable: true }, inputsUsed: { type: "STRING", nullable: true }, harvestAmount: { type: "NUMBER", nullable: true }, harvestUnit: { type: "STRING", nullable: true }, isHarvesting: { type: "BOOLEAN" },
               fieldConfidence: { type: "OBJECT", required: ["plotId", "crop", "activityType", "inputsUsed", "harvestAmount", "harvestUnit"], properties: { plotId: { type: "NUMBER", nullable: true }, crop: { type: "NUMBER", nullable: true }, activityType: { type: "NUMBER", nullable: true }, inputsUsed: { type: "NUMBER", nullable: true }, harvestAmount: { type: "NUMBER", nullable: true }, harvestUnit: { type: "NUMBER", nullable: true } } }
             }
           }
@@ -73,6 +75,7 @@ export class GeminiService implements VoiceAnalyzer {
     const parsed = outputSchema.parse(JSON.parse(text));
     return {
       transcript: parsed.transcript,
+      ...(parsed.occurredAt ? { occurredAt:parsed.occurredAt } : {}),
       ...(parsed.plotName ? { plotName: parsed.plotName } : {}),
       extracted: {
         ...(parsed.plotId ? { plotId: parsed.plotId } : {}), ...(parsed.crop ? { crop: parsed.crop } : {}), ...(parsed.activityType ? { activityType: parsed.activityType } : {}), ...(parsed.inputsUsed ? { inputsUsed: parsed.inputsUsed } : {}), ...(parsed.harvestAmount !== null ? { harvestAmount: parsed.harvestAmount } : {}), ...(parsed.harvestUnit ? { harvestUnit: parsed.harvestUnit } : {}), isHarvesting: parsed.isHarvesting, fieldConfidence: Object.fromEntries(Object.entries(parsed.fieldConfidence).filter((entry): entry is [string, number] => entry[1] !== null))

@@ -33,7 +33,7 @@ export class MemoryRepository implements Repository {
   }
 
   async getActivity(id: string) { const item = this.activities.get(id); return item ? structuredClone(item) : undefined; }
-  async findActivityBySourceEvent(id: string) { const item = [...this.activities.values()].find((value) => value.sourceEventId === id); return item ? structuredClone(item) : undefined; }
+  async findActivityBySourceEvent(id: string) { const item = [...this.activities.values()].find((value) => value.sourceEventId === id || value.sourceEventIds?.includes(id)); return item ? structuredClone(item) : undefined; }
   async saveActivity(item: Activity) { this.activities.set(item.activityId, structuredClone(item)); }
   async listReviews(id: string) { return this.reviews.filter((item) => item.activityId === id).map((item) => structuredClone(item)); }
   async saveReview(item: Review) { this.reviews.push(structuredClone(item)); }

@@ -5,6 +5,7 @@ import { HttpError } from "../lib/http-error.js";
 import { evaluateIcsRisk } from "../domain/ics-rules.js";
 import type { VoiceAnalyzer } from "./gemini-service.js";
 import { createId } from "../lib/ids.js";
+import type { Activity } from "../domain/types.js";
 
 interface LineEvent { type: string; webhookEventId?: string; replyToken?: string; timestamp: number; source: { type: string; userId?: string }; message?: { type: string; id: string; text?: string; duration?: number; contentProvider?: { type: string } }; }
 interface LineWebhookBody { events?: unknown[]; }
@@ -39,33 +40,19 @@ export class LineService {
       if (!this.analyzer) { await this.reply(event.replyToken, "ระบบถอดเสียงยังไม่พร้อม กรุณาตรวจ GEMINI_API_KEY และ AI_PROVIDER"); failed++; continue; }
       await this.reply(event.replyToken, "รับไฟล์เสียงแล้ว กำลังถอดเสียงและตรวจข้อมูล ระบบจะแจ้งผลกลับมาอีกครั้ง");
       const now = new Date().toISOString();
-      const activity = { activityId: `ACT-${event.timestamp}-${event.message.id.slice(-6)}`, sourceEventId, farmerId: farmer.farmerId, farmerName: farmer.displayName, occurredAt: new Date(event.timestamp).toISOString(), receivedAt: now, audioContentId: event.message.id, processingStatus: "PROCESSING" as const, riskStatus: "NEEDS_REVIEW" as const, confidence: 0, flagReasons: [] as string[], matchedTerms: [] as string[], updatedAt: now };
+      const awaiting = (await this.repository.listActivities({ status:"AWAITING_FARMER" }))
+        .filter((item) => item.farmerId === farmer.farmerId)
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+      const activity = awaiting
+        ? { ...awaiting, sourceEventIds:[...new Set([awaiting.sourceEventId, ...(awaiting.sourceEventIds ?? []), sourceEventId])], audioContentId:event.message.id, processingStatus:"PROCESSING" as const, updatedAt:now }
+        : { activityId: `ACT-${event.timestamp}-${event.message.id.slice(-6)}`, sourceEventId, sourceEventIds:[sourceEventId], farmerId: farmer.farmerId, farmerName: farmer.displayName, occurredAt: new Date(event.timestamp).toISOString(), receivedAt: now, audioContentId: event.message.id, processingStatus: "PROCESSING" as const, riskStatus: "NEEDS_REVIEW" as const, confidence: 0, flagReasons: [] as string[], matchedTerms: [] as string[], updatedAt: now };
       await this.repository.saveActivity(activity);
-      await this.snapshot("ACTIVITY", activity.activityId, farmer.farmerId, "VOICE_RECEIVED", undefined, activity);
+      await this.snapshot("ACTIVITY", activity.activityId, farmer.farmerId, awaiting ? "FOLLOWUP_VOICE_RECEIVED" : "VOICE_RECEIVED", awaiting, activity);
       try {
-        const { audio, mimeType } = await this.downloadAudio(event.message.id);
-        const analysis = await this.analyzer.analyze(audio, mimeType);
-        const rule = evaluateIcsRisk(analysis.extracted, analysis.transcript);
-        const registeredPlot = analysis.extracted.plotId ? await this.repository.getPlot(analysis.extracted.plotId) : undefined;
-        if (analysis.extracted.plotId && !registeredPlot) {
-          rule.riskStatus = "NEEDS_REVIEW";
-          rule.reasons.push(`ไม่พบแปลง ${analysis.extracted.plotId} ในทะเบียน`);
-        } else if (registeredPlot) {
-          if (registeredPlot.farmerId !== farmer.farmerId || registeredPlot.status !== "ACTIVE") {
-            rule.riskStatus = "NEEDS_REVIEW";
-            rule.reasons.push("แปลงที่ระบุไม่ได้อยู่ในบัญชีเกษตรกรหรือไม่ได้เปิดใช้งาน");
-          }
-          if (analysis.extracted.crop && normalizeThai(analysis.extracted.crop) !== normalizeThai(registeredPlot.crop)) {
-            rule.riskStatus = "NEEDS_REVIEW";
-            rule.reasons.push(`พืชจากเสียง “${analysis.extracted.crop}” ไม่ตรงกับทะเบียนแปลง “${registeredPlot.crop}”`);
-          }
-        }
-        const confidenceValues = Object.values(analysis.extracted.fieldConfidence);
-        const confidence = confidenceValues.length ? confidenceValues.reduce((a, b) => a + b, 0) / confidenceValues.length : 0;
-        const completed = { ...activity, transcript: analysis.transcript, ...analysis.extracted, ...(registeredPlot ? { plotName:registeredPlot.name } : analysis.plotName ? { plotName: analysis.plotName } : {}), processingStatus: (rule.riskStatus === "PROVISIONALLY_CLEAR" ? "NEEDS_CONFIRMATION" : "NEEDS_REVIEW") as "NEEDS_CONFIRMATION" | "NEEDS_REVIEW", riskStatus: rule.riskStatus, confidence, flagReasons: rule.reasons, matchedTerms: rule.matchedTerms, updatedAt: new Date().toISOString() };
+        const completed = await this.analyzeActivity(activity, farmer.farmerId);
         await this.repository.saveActivity(completed);
-        await this.snapshot("ACTIVITY", activity.activityId, "system:voice-pipeline", "VOICE_PROCESSED", activity, completed);
-        await pushLineText(this.config, event.source.userId!, this.summary(completed.activityId, analysis.transcript, rule.riskStatus));
+        await this.snapshot("ACTIVITY", activity.activityId, "system:voice-pipeline", awaiting ? "FOLLOWUP_MERGED" : "VOICE_PROCESSED", activity, completed);
+        await pushLineText(this.config, event.source.userId!, this.summary(completed.activityId, completed.transcript!, completed.riskStatus));
         accepted++;
       } catch (error) {
         const failedActivity = { ...activity, processingStatus: "FAILED_RETRYABLE" as const, flagReasons: [error instanceof Error ? error.message.slice(0, 300) : "Unknown processing error"], updatedAt: new Date().toISOString() };
@@ -76,6 +63,61 @@ export class LineService {
       }
     }
     return { accepted, duplicates, ignored, failed };
+  }
+
+  async retryActivity(activityId: string, actorId: string) {
+    const before = await this.repository.getActivity(activityId);
+    if (!before) throw new HttpError(404, "ACTIVITY_NOT_FOUND", "ไม่พบกิจกรรมที่ต้องการประมวลผลใหม่");
+    if (before.processingStatus !== "FAILED_RETRYABLE" || !before.audioContentId) throw new HttpError(409, "ACTIVITY_NOT_RETRYABLE", "รายการนี้ไม่มีไฟล์เสียงหรือไม่อยู่ในสถานะที่ลองใหม่ได้");
+    if (!this.analyzer) throw new HttpError(503, "AI_NOT_CONFIGURED", "ระบบ AI ยังไม่พร้อมใช้งาน");
+    const farmer = await this.repository.getFarmer(before.farmerId);
+    const processing = { ...before, processingStatus:"PROCESSING" as const, updatedAt:new Date().toISOString() };
+    await this.repository.saveActivity(processing);
+    await this.snapshot("ACTIVITY", activityId, actorId, "RETRY_STARTED", before, processing);
+    try {
+      const completed = await this.analyzeActivity(processing, before.farmerId);
+      await this.repository.saveActivity(completed);
+      await this.snapshot("ACTIVITY", activityId, actorId, "RETRY_SUCCEEDED", processing, completed);
+      if (farmer?.lineUserId) await pushLineText(this.config, farmer.lineUserId, this.summary(completed.activityId, completed.transcript!, completed.riskStatus)).catch(() => undefined);
+      return completed;
+    } catch (error) {
+      const failed = { ...processing, processingStatus:"FAILED_RETRYABLE" as const, flagReasons:[error instanceof Error ? error.message.slice(0,300) : "Unknown processing error"], updatedAt:new Date().toISOString() };
+      await this.repository.saveActivity(failed);
+      await this.snapshot("ACTIVITY", activityId, actorId, "RETRY_FAILED", processing, failed, failed.flagReasons[0]);
+      throw new HttpError(502, "VOICE_RETRY_FAILED", "ประมวลผลเสียงซ้ำไม่สำเร็จ กรุณาตรวจสถานะ AI แล้วลองอีกครั้ง");
+    }
+  }
+
+  private async analyzeActivity(activity: Activity, farmerId: string) {
+    if (!this.analyzer || !activity.audioContentId) throw new Error("Voice analyzer or audio content is unavailable");
+    const { audio, mimeType } = await this.downloadAudio(activity.audioContentId);
+    const analysis = await this.analyzer.analyze(audio, mimeType);
+    const extracted = mergeExtracted(activity, analysis.extracted);
+    const transcript = activity.transcript ? `${activity.transcript}\nข้อมูลเพิ่มเติม: ${analysis.transcript}` : analysis.transcript;
+    const registeredPlot = await this.matchRegisteredPlot(farmerId, extracted.plotId, analysis.plotName, analysis.transcript);
+    const resolved = registeredPlot ? { ...extracted, plotId:registeredPlot.plotId, crop:extracted.crop ?? registeredPlot.crop } : extracted;
+    const rule = evaluateIcsRisk(resolved, transcript);
+    if ((extracted.plotId || analysis.plotName) && !registeredPlot) { rule.riskStatus = "NEEDS_REVIEW"; rule.reasons.push(`ไม่พบแปลง “${analysis.plotName ?? extracted.plotId}” ในทะเบียนของเกษตรกร`); }
+    else if (registeredPlot) {
+      if (registeredPlot.farmerId !== farmerId || registeredPlot.status !== "ACTIVE") { rule.riskStatus = "NEEDS_REVIEW"; rule.reasons.push("แปลงที่ระบุไม่ได้อยู่ในบัญชีเกษตรกรหรือไม่ได้เปิดใช้งาน"); }
+      if (resolved.crop && normalizeThai(resolved.crop) !== normalizeThai(registeredPlot.crop)) { rule.riskStatus = "NEEDS_REVIEW"; rule.reasons.push(`พืชจากเสียง “${resolved.crop}” ไม่ตรงกับทะเบียนแปลง “${registeredPlot.crop}”`); }
+    }
+    const confidenceValues = Object.values(resolved.fieldConfidence);
+    const confidence = confidenceValues.length ? confidenceValues.reduce((a, b) => a + b, 0) / confidenceValues.length : 0;
+    return { ...activity, ...(analysis.occurredAt && !activity.transcript ? { occurredAt:analysis.occurredAt } : {}), transcript, ...resolved, ...(registeredPlot ? { plotName:registeredPlot.name } : analysis.plotName ? { plotName:analysis.plotName } : {}), processingStatus:(rule.riskStatus === "PROVISIONALLY_CLEAR" ? "NEEDS_CONFIRMATION" : "NEEDS_REVIEW") as "NEEDS_CONFIRMATION" | "NEEDS_REVIEW", riskStatus:rule.riskStatus, confidence, flagReasons:rule.reasons, matchedTerms:rule.matchedTerms, updatedAt:new Date().toISOString() };
+  }
+
+  private async matchRegisteredPlot(farmerId: string, plotId?: string, plotName?: string, transcript?: string) {
+    const plots = (await this.repository.listPlots(farmerId)).filter((plot) => plot.status === "ACTIVE");
+    if (!plots.length) return undefined;
+    const direct = plotId ? plots.find((plot) => normalizeThai(plot.plotId) === normalizeThai(plotId)) : undefined;
+    if (direct) return direct;
+    const candidates = [plotId, plotName].filter((value): value is string => Boolean(value));
+    const byName = plots.find((plot) => candidates.some((value) => equivalentPlotName(plot.name, value)));
+    if (byName) return byName;
+    const mentioned = plots.filter((plot) => normalizePlotName(transcript ?? "").includes(normalizePlotName(plot.name)));
+    if (mentioned.length === 1) return mentioned[0];
+    return plots.length === 1 ? plots[0] : undefined;
   }
 
   private async handleTextCommand(event: LineEvent) {
@@ -127,6 +169,21 @@ export class LineService {
 }
 
 function normalizeThai(value: string) { return value.trim().toLocaleLowerCase("th-TH").replace(/\s+/g, ""); }
+function normalizePlotName(value: string) {
+  const numbers: Record<string,string> = { "หนึ่ง":"1", "สอง":"2", "สาม":"3", "สี่":"4", "ห้า":"5", "หก":"6", "เจ็ด":"7", "แปด":"8", "เก้า":"9", "ศูนย์":"0" };
+  let normalized = normalizeThai(value).replace(/^(แปลงที่|แปลง)/, "");
+  for (const [word, digit] of Object.entries(numbers)) normalized = normalized.replaceAll(word, digit);
+  return normalized.replace(/[^\p{L}\p{N}]/gu, "");
+}
+function equivalentPlotName(left: string, right: string) { const a=normalizePlotName(left), b=normalizePlotName(right); return a === b || a.endsWith(b) || b.endsWith(a); }
+function mergeExtracted(activity: Activity, next: Awaited<ReturnType<VoiceAnalyzer["analyze"]>>["extracted"]) {
+  return {
+    ...(activity.plotId ? { plotId:activity.plotId } : {}), ...(activity.crop ? { crop:activity.crop } : {}), ...(activity.activityType ? { activityType:activity.activityType } : {}), ...(activity.inputsUsed ? { inputsUsed:activity.inputsUsed } : {}), ...(activity.harvestAmount !== undefined ? { harvestAmount:activity.harvestAmount } : {}), ...(activity.harvestUnit ? { harvestUnit:activity.harvestUnit } : {}),
+    ...Object.fromEntries(Object.entries(next).filter(([, value]) => value !== undefined)),
+    isHarvesting:next.isHarvesting || activity.harvestAmount !== undefined,
+    fieldConfidence:{ ...(activity.confidence ? { existing:activity.confidence } : {}), ...next.fieldConfidence }
+  };
+}
 
 export async function pushLineText(config: AppConfig, lineUserId: string, text: string) {
   if (!config.LINE_CHANNEL_ACCESS_TOKEN) throw new Error("LINE_CHANNEL_ACCESS_TOKEN is not configured");
