@@ -296,3 +296,10 @@
 - ป้องกันการแก้อัตโนมัติเมื่อกิจกรรมถูกสร้างเป็นล็อตแล้ว เพื่อไม่ให้ traceability เปลี่ยนโดยไม่มี impact review
 - Google Sheets เพิ่มคอลัมน์ `revision` และ `correction_requested_at` ใน Activities อัตโนมัติ
 - typecheck, automated tests 30/30 และ production build ผ่าน
+
+## 2026-10-18 — Enforce harvest-only lot creation
+
+- เพิ่ม server-side guard ให้สร้างล็อตได้เฉพาะเมื่อ `activityType` ระบุคำว่า `เก็บเกี่ยว`
+- หน้า `ล็อตและคลัง` แสดงเฉพาะกิจกรรมเก็บเกี่ยวที่อนุมัติและมีข้อมูลครบ
+- แม้กิจกรรมประเภทอื่นจะมีปริมาณและหน่วย ระบบจะตอบ `NOT_HARVEST_ACTIVITY` และไม่สร้างล็อต
+- เพิ่ม regression test เพื่อป้องกันกฎนี้ถดถอย

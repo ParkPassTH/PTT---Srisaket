@@ -35,7 +35,7 @@
 | F-014 | Review detail พร้อมหลักฐาน | ICS | In Progress | transcript/extraction/rule/audit พร้อม; รอ audio player |
 | F-015 | Approve / Flag / Request info / Void | ICS | In Progress | approve/flag/request พร้อม; รอ void confirmation flow |
 | F-016 | Activity registry | ICS | Done | ค้น กรอง และเปิดรายละเอียดกิจกรรมได้ |
-| F-017 | สร้างล็อตจากกิจกรรมเก็บเกี่ยว | ICS/Warehouse | Done | ต้องอนุมัติและมีพืช แปลง ปริมาณ หน่วยครบ |
+| F-017 | สร้างล็อตจากกิจกรรมเก็บเกี่ยว | ICS/Warehouse | Done | ต้องระบุประเภทกิจกรรมว่าเก็บเกี่ยว ได้รับอนุมัติ และมีพืช แปลง ปริมาณ หน่วยครบ |
 | F-018 | Lot ID ที่ไม่ซ้ำ | ระบบ | Done | UUID-based ID และป้องกันสร้างซ้ำจากกิจกรรมเดียว |
 | F-019 | QR และ trace URL | Warehouse | Done | ดาวน์โหลด QR PNG ที่บรรจุ opaque trace token ไม่มี PII |
 | F-020 | Inventory status workflow | Warehouse | Done | transition ตามกฎ เก็บเหตุผล ผู้ทำ และ audit |
@@ -100,3 +100,4 @@
 | 18 ต.ค. 2569 | พัก multi-user/RBAC และเพิ่ม backup/restore กับ CI | จัดลำดับตามคำขอผู้ใช้ โดยเร่งความปลอดภัยข้อมูลและการตรวจ build ก่อน | Codex |
 | 18 ต.ค. 2569 | เพิ่ม LINE Flex Message และ correction flow แบบกดปุ่ม | ลดการพิมพ์ Activity ID และให้เสียงแก้ไขกลับเข้า activity เดิมโดยอัตโนมัติ | Codex |
 | 18 ต.ค. 2569 | ขยาย correction workflow ให้แก้รายการที่ยืนยันแล้ว | รองรับ `แก้ไขล่าสุด`, session 30 นาที, revision, เปรียบเทียบก่อน–หลัง และป้องกันแก้รายการที่สร้างล็อตแล้ว | Codex |
+| 18 ต.ค. 2569 | บังคับกิจกรรมเก็บเกี่ยวก่อนสร้างล็อต | ป้องกันกิจกรรมประเภทอื่นที่มีปริมาณ/หน่วยติดมาถูกสร้างเป็นสินค้า | Codex |

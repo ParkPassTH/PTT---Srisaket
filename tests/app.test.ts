@@ -161,6 +161,16 @@ describe("HTTP API", () => {
     assert.match(report.text, /ACT-TEST-001/);
   });
 
+  it("rejects lot creation when the approved activity is not harvesting", async () => {
+    const agent = request.agent(app);
+    await agent.post("/api/auth/login").send({ email:"admin@example.com", password:"secure-test-password" });
+    await agent.patch("/api/activities/ACT-TEST-001").send({ occurredAt:"2026-10-18T08:30:00+07:00", plotId:"P-TEST", crop:"พืชทดสอบ", activityType:"รดน้ำ", harvestAmount:12, harvestUnit:"กก.", reason:"ทดสอบกิจกรรมที่ไม่ใช่การเก็บเกี่ยว" });
+    await agent.post("/api/activities/ACT-TEST-001/review").send({ decision:"APPROVE", reason:"ทดสอบอนุมัติรายการที่ไม่ใช่เก็บเกี่ยว" });
+    const response = await agent.post("/api/lots").send({ activityId:"ACT-TEST-001" });
+    assert.equal(response.status, 409);
+    assert.equal(response.body.error.code, "NOT_HARVEST_ACTIVITY");
+  });
+
   it("exposes only privacy-safe trace fields", async () => {
     const response = await request(app).get("/api/trace/trace-test-001");
     assert.equal(response.status, 200);

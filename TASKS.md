@@ -70,7 +70,7 @@
 
 ## Phase 4 — Inventory และ Traceability
 
-- [x] T-401 harvest eligibility service — อนุมัติและข้อมูลเก็บเกี่ยวครบก่อนสร้าง — F-017
+- [x] T-401 harvest eligibility service — ต้องระบุว่าเก็บเกี่ยว ได้รับอนุมัติ และข้อมูลพืช/แปลง/ปริมาณ/หน่วยครบ — F-017
 - [x] T-402 unique Lot ID generator — UUID-based — F-018
 - [x] T-403 QR/trace token service — random trace token และ PNG download — F-019
 - [x] T-404 inventory workflow — ตรวจ transition และบังคับเหตุผล — F-020

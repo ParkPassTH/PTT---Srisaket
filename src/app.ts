@@ -342,6 +342,7 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
       if (!activity) throw new HttpError(404, "ACTIVITY_NOT_FOUND", "ไม่พบกิจกรรมเก็บเกี่ยว");
       if (activity.createdLotId) throw new HttpError(409, "LOT_EXISTS", "กิจกรรมนี้สร้างล็อตแล้ว");
       if (activity.riskStatus !== "APPROVED") throw new HttpError(409, "ACTIVITY_NOT_APPROVED", "ต้องอนุมัติกิจกรรมก่อนสร้างล็อต");
+      if (!isHarvestActivity(activity.activityType)) throw new HttpError(409, "NOT_HARVEST_ACTIVITY", "สร้างล็อตได้เฉพาะกิจกรรมที่ระบุว่าเก็บเกี่ยว");
       if (!activity.crop || !activity.plotName || !activity.harvestAmount || !activity.harvestUnit) throw new HttpError(409, "HARVEST_DATA_INCOMPLETE", "ข้อมูลพืช แปลง ปริมาณ หรือหน่วยยังไม่ครบ");
       const now = new Date().toISOString();
       const lot = { lotId:createId("LOT"), activityId:activity.activityId, farmerId:activity.farmerId, farmerName:activity.farmerName, plotName:activity.plotName, crop:activity.crop, quantity:activity.harvestAmount, unit:activity.harvestUnit, harvestDate:activity.occurredAt.slice(0,10), inventoryStatus:"IN_STOCK" as const, traceToken:createTraceToken(), createdAt:now, updatedAt:now };
@@ -438,3 +439,4 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
 }
 
 function defined<T extends Record<string, unknown>>(value: T) { return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as Partial<T>; }
+function isHarvestActivity(activityType?: string) { return activityType?.trim().toLocaleLowerCase("th-TH").includes("เก็บเกี่ยว") ?? false; }
