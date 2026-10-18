@@ -2,6 +2,8 @@ export type ProcessingStatus =
   | "RECEIVED"
   | "PROCESSING"
   | "NEEDS_CONFIRMATION"
+  | "CORRECTION_PENDING"
+  | "CORRECTION_CONFIRMATION"
   | "NEEDS_REVIEW"
   | "AWAITING_FARMER"
   | "COMPLETED"
@@ -98,6 +100,8 @@ export interface Activity {
   flagReasons: string[];
   matchedTerms: string[];
   createdLotId?: string;
+  revision?: number;
+  correctionRequestedAt?: string;
   updatedAt: string;
 }
 

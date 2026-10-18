@@ -97,7 +97,40 @@ describe("LINE voice pipeline", () => {
     assert.match(JSON.stringify(push), /ยืนยันข้อมูล/);
     const correction = Buffer.from(JSON.stringify({ events:[{ type:"message", webhookEventId:"correct-flex", replyToken:"reply-correct", timestamp:1700000009000, source:{ type:"user", userId:"U-REAL" }, message:{ type:"text", id:"text-correct", text:`ขอแก้ไข ${activity.activityId}` } }] }));
     await service.acceptWebhook(correction, sign(correction));
-    assert.equal((await repository.getActivity(activity.activityId))?.processingStatus, "AWAITING_FARMER");
-    assert.equal((await repository.listAuditEvents(activity.activityId)).at(-1)?.action, "FARMER_REQUEST_CORRECTION");
+    assert.equal((await repository.getActivity(activity.activityId))?.processingStatus, "CORRECTION_PENDING");
+    assert.equal((await repository.listAuditEvents(activity.activityId)).at(-1)?.action, "CORRECTION_REQUESTED");
+  });
+
+  it("corrects the latest completed activity in place and confirms a new revision", async () => {
+    const repository = new MemoryRepository();
+    await repository.saveFarmer({ farmerId:"F-001", memberCode:"M001", displayName:"ผู้ทดสอบ", lineUserId:"U-REAL", status:"ACTIVE" });
+    await repository.savePlot({ plotId:"P-001", farmerId:"F-001", name:"แปลงหนึ่ง", crop:"ข้าว", status:"ACTIVE" });
+    await repository.savePlot({ plotId:"P-002", farmerId:"F-001", name:"แปลงสอง", crop:"มันสำปะหลัง", status:"ACTIVE" });
+    await repository.saveActivity({ activityId:"ACT-CORRECT", sourceEventId:"voice-original", farmerId:"F-001", farmerName:"ผู้ทดสอบ", plotId:"P-001", plotName:"แปลงหนึ่ง", crop:"ข้าว", activityType:"ปลูก", occurredAt:"2026-10-18T01:00:00.000Z", receivedAt:"2026-10-18T01:00:00.000Z", transcript:"ปลูกข้าวแปลงหนึ่ง", processingStatus:"COMPLETED", riskStatus:"PROVISIONALLY_CLEAR", confidence:0.95, flagReasons:[], matchedTerms:[], revision:1, updatedAt:new Date().toISOString() });
+    const sentBodies: string[] = [];
+    globalThis.fetch = async (input, init) => {
+      if (init?.body) sentBodies.push(String(init.body));
+      return String(input).includes("api-data.line.me") ? new Response(Buffer.from("audio"), { status:200, headers:{ "content-type":"audio/mp4" } }) : new Response("{}", { status:200 });
+    };
+    const analyzer: VoiceAnalyzer = { analyze: async () => ({ transcript:"แก้เป็นแปลงสอง", plotName:"แปลงสอง", extracted:{ plotId:"แปลงสอง", isHarvesting:false, fieldConfidence:{ plotId:0.98 } } }) };
+    const service = new LineService(config, repository, analyzer);
+    const request = Buffer.from(JSON.stringify({ events:[{ type:"message", webhookEventId:"correct-latest", replyToken:"reply-request", timestamp:3, source:{ type:"user", userId:"U-REAL" }, message:{ type:"text", id:"text-request", text:"แก้ไขล่าสุด" } }] }));
+    await service.acceptWebhook(request, sign(request));
+    assert.equal((await repository.getActivity("ACT-CORRECT"))?.processingStatus, "CORRECTION_PENDING");
+
+    const voice = Buffer.from(JSON.stringify({ events:[{ type:"message", webhookEventId:"correction-voice", replyToken:"reply-voice", timestamp:4, source:{ type:"user", userId:"U-REAL" }, message:{ type:"audio", id:"audio-correct", duration:3000 } }] }));
+    await service.acceptWebhook(voice, sign(voice));
+    const proposed = await repository.getActivity("ACT-CORRECT");
+    assert.equal((await repository.listActivities()).length, 1);
+    assert.equal(proposed?.processingStatus, "CORRECTION_CONFIRMATION");
+    assert.equal(proposed?.plotId, "P-002");
+    assert.equal(proposed?.crop, "มันสำปะหลัง");
+    assert.equal(proposed?.revision, 2);
+    assert.ok(sentBodies.some((body) => body.includes("ยืนยันการแก้ไข") && body.includes("เปลี่ยนแปลง")));
+
+    const confirm = Buffer.from(JSON.stringify({ events:[{ type:"message", webhookEventId:"confirm-correction", replyToken:"reply-confirm", timestamp:5, source:{ type:"user", userId:"U-REAL" }, message:{ type:"text", id:"text-confirm-correction", text:"ยืนยัน ACT-CORRECT" } }] }));
+    await service.acceptWebhook(confirm, sign(confirm));
+    assert.equal((await repository.getActivity("ACT-CORRECT"))?.processingStatus, "COMPLETED");
+    assert.deepEqual((await repository.listAuditEvents("ACT-CORRECT")).map((event) => event.action), ["CORRECTION_REQUESTED","CORRECTION_VOICE_RECEIVED","CORRECTION_PROPOSED","CORRECTION_CONFIRMED"]);
   });
 });

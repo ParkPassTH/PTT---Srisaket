@@ -284,3 +284,15 @@
 - Google Sheets เพิ่มคอลัมน์ `line_message` ในชีต Outbox อัตโนมัติโดยไม่กระทบข้อมูลเดิม
 - typecheck, automated tests 29/29 และ production build ผ่าน
 - ยืนยันการจัดลำดับว่า durable multi-user/RBAC เป็นงานท้ายสุดตามคำขอผู้ใช้
+
+## 2026-10-18 — Voice correction after confirmation
+
+- เพิ่มคำสั่ง `แก้ไขล่าสุด` และ `แก้ไข <Activity ID>` สำหรับรายการที่ยืนยันแล้ว
+- เปิด correction session 30 นาทีและจำกัดหนึ่งรายการต่อเกษตรกร ป้องกันเสียงไปแก้ผิดกิจกรรม
+- เสียงแก้ไขใช้ `activity_id` เดิมและเพิ่ม `revision`; ไม่สร้างแถวกิจกรรมใหม่
+- เมื่อเปลี่ยนแปลงแปลงโดยไม่พูดชื่อพืช ระบบเติมพืชจากทะเบียนแปลงใหม่แทนการคงค่าพืชเก่า
+- ส่ง Flex Message แสดงข้อมูลที่เปลี่ยนแบบ `ค่าเดิม → ค่าใหม่` และปุ่ม `ยืนยันการแก้ไข`
+- เพิ่ม audit `CORRECTION_REQUESTED`, `CORRECTION_VOICE_RECEIVED`, `CORRECTION_PROPOSED`, `CORRECTION_CONFIRMED`
+- ป้องกันการแก้อัตโนมัติเมื่อกิจกรรมถูกสร้างเป็นล็อตแล้ว เพื่อไม่ให้ traceability เปลี่ยนโดยไม่มี impact review
+- Google Sheets เพิ่มคอลัมน์ `revision` และ `correction_requested_at` ใน Activities อัตโนมัติ
+- typecheck, automated tests 30/30 และ production build ผ่าน

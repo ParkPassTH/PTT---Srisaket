@@ -53,6 +53,7 @@
 - [x] T-211 audit snapshots ของ LINE lifecycle และ account linking — F-022
 - [x] T-212 ผูกเสียงตอบข้อมูลเพิ่มเข้ากับ activity ที่รอเกษตรกรล่าสุด — F-032
 - [x] T-213 จับคู่รหัส/ชื่อ/เลขแปลงและเติมพืชจากทะเบียนก่อนตรวจข้อมูลครบ — F-033
+- [x] T-214 แก้กิจกรรมเดิมด้วยเสียงหลังยืนยัน พร้อม correction session, revision, diff และ audit — F-008, F-107
 
 ## Phase 3 — Dashboard
 

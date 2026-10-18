@@ -26,7 +26,7 @@
 | F-005A | AI provider abstraction (OpenAI/Gemini) | ระบบ/Developer | Partial | มี VoiceAnalyzer contract และ Gemini adapter; OpenAI adapter ยังไม่เชื่อม |
 | F-006 | สกัดข้อมูลกิจกรรมตาม schema | ระบบ | Implemented | Gemini structured JSON + Zod validation; invalid output เป็น FAILED_RETRYABLE |
 | F-007 | ICS deterministic rule engine | ICS | In Progress | engine และ tests พร้อม; รอรายการสารฉบับอนุมัติ |
-| F-008 | Farmer confirmation ผ่าน LINE | เกษตรกร | Implemented | กดยืนยันหรือขอแก้ไขจากการ์ด LINE; เสียงแก้ไขเติมรายการเดิมและมี audit |
+| F-008 | Farmer confirmation ผ่าน LINE | เกษตรกร | Done | กดยืนยัน/แก้ไขจากการ์ด หรือส่ง `แก้ไขล่าสุด`; เสียงแก้ไขเติมรายการเดิม มี revision และ audit |
 | F-009 | Flex Message ผลสำเร็จ/ต้องตรวจ/ผิดพลาด | เกษตรกร | Done | การ์ดภาษาไทยสรุปแปลง พืช กิจกรรม สถานะ พร้อมปุ่มที่มีข้อความกำกับ ไม่พึ่งสีอย่างเดียว |
 | F-010 | Authentication สำหรับ Dashboard | เจ้าหน้าที่ | Deferred | local secure session พร้อม; ผู้ใช้ขอพัก durable user store ไว้ก่อน |
 | F-011 | Role-based access control | เจ้าหน้าที่ | Deferred | API role checks เดิมยังทำงาน; พัก user management ตามคำขอผู้ใช้ |
@@ -63,7 +63,7 @@
 | F-104 | Reports และ CSV export | ICS/Auditor | Done | export CSV ตามสิทธิ์และบันทึก audit |
 | F-105 | Rule management UI | Admin | Planned | draft/publish/version/rollback |
 | F-106 | System status panel | Admin | Partial | แสดง readiness ของ Sheets, LINE, AI, trace; รอ quota/queue metrics |
-| F-107 | Data correction workflow | ICS | Planned | correction ไม่เขียนทับหลักฐานต้นทาง |
+| F-107 | Data correction workflow | เกษตรกร/ICS | Done | แก้รายการเดิมด้วยเสียง แสดงก่อน–หลัง เพิ่ม revision และเก็บ audit; รายการที่สร้างล็อตแล้วส่งให้เจ้าหน้าที่ |
 | F-108 | Lot recall workflow | Warehouse/Admin | Planned | RECALL พร้อมเหตุผลและผลกระทบ |
 
 ## Deferred
@@ -99,3 +99,4 @@
 | 18 ต.ค. 2569 | เพิ่ม LINE Outbox, retry, dead-letter และ readiness | ป้องกันข้อความแจ้งเตือนหายเมื่อ LINE ล่มและให้ Admin กู้คิวได้ | Codex |
 | 18 ต.ค. 2569 | พัก multi-user/RBAC และเพิ่ม backup/restore กับ CI | จัดลำดับตามคำขอผู้ใช้ โดยเร่งความปลอดภัยข้อมูลและการตรวจ build ก่อน | Codex |
 | 18 ต.ค. 2569 | เพิ่ม LINE Flex Message และ correction flow แบบกดปุ่ม | ลดการพิมพ์ Activity ID และให้เสียงแก้ไขกลับเข้า activity เดิมโดยอัตโนมัติ | Codex |
+| 18 ต.ค. 2569 | ขยาย correction workflow ให้แก้รายการที่ยืนยันแล้ว | รองรับ `แก้ไขล่าสุด`, session 30 นาที, revision, เปรียบเทียบก่อน–หลัง และป้องกันแก้รายการที่สร้างล็อตแล้ว | Codex |

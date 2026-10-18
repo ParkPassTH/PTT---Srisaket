@@ -43,19 +43,22 @@ export class LineService {
       if (!this.analyzer) { await this.reply(event.replyToken, "ระบบถอดเสียงยังไม่พร้อม กรุณาตรวจ GEMINI_API_KEY และ AI_PROVIDER"); failed++; continue; }
       await this.reply(event.replyToken, "รับไฟล์เสียงแล้ว กำลังถอดเสียงและตรวจข้อมูล ระบบจะแจ้งผลกลับมาอีกครั้ง");
       const now = new Date().toISOString();
-      const awaiting = (await this.repository.listActivities({ status:"AWAITING_FARMER" }))
+      const awaiting = (await this.repository.listActivities())
+        .filter((item) => item.processingStatus === "AWAITING_FARMER" || item.processingStatus === "CORRECTION_PENDING")
         .filter((item) => item.farmerId === farmer.farmerId)
+        .filter((item) => !item.correctionRequestedAt || Date.now() - new Date(item.correctionRequestedAt).getTime() <= 30 * 60_000)
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+      const isCorrection = awaiting?.processingStatus === "CORRECTION_PENDING";
       const activity = awaiting
         ? { ...awaiting, sourceEventIds:[...new Set([awaiting.sourceEventId, ...(awaiting.sourceEventIds ?? []), sourceEventId])], audioContentId:event.message.id, processingStatus:"PROCESSING" as const, updatedAt:now }
-        : { activityId: `ACT-${event.timestamp}-${event.message.id.slice(-6)}`, sourceEventId, sourceEventIds:[sourceEventId], farmerId: farmer.farmerId, farmerName: farmer.displayName, occurredAt: new Date(event.timestamp).toISOString(), receivedAt: now, audioContentId: event.message.id, processingStatus: "PROCESSING" as const, riskStatus: "NEEDS_REVIEW" as const, confidence: 0, flagReasons: [] as string[], matchedTerms: [] as string[], updatedAt: now };
+        : { activityId: `ACT-${event.timestamp}-${event.message.id.slice(-6)}`, sourceEventId, sourceEventIds:[sourceEventId], farmerId: farmer.farmerId, farmerName: farmer.displayName, occurredAt: new Date(event.timestamp).toISOString(), receivedAt: now, audioContentId: event.message.id, processingStatus: "PROCESSING" as const, riskStatus: "NEEDS_REVIEW" as const, confidence: 0, flagReasons: [] as string[], matchedTerms: [] as string[], revision:1, updatedAt: now };
       await this.repository.saveActivity(activity);
-      await this.snapshot("ACTIVITY", activity.activityId, farmer.farmerId, awaiting ? "FOLLOWUP_VOICE_RECEIVED" : "VOICE_RECEIVED", awaiting, activity);
+      await this.snapshot("ACTIVITY", activity.activityId, farmer.farmerId, isCorrection ? "CORRECTION_VOICE_RECEIVED" : awaiting ? "FOLLOWUP_VOICE_RECEIVED" : "VOICE_RECEIVED", awaiting, activity);
       try {
-        const completed = await this.analyzeActivity(activity, farmer.farmerId);
+        const completed = await this.analyzeActivity(activity, farmer.farmerId, isCorrection);
         await this.repository.saveActivity(completed);
-        await this.snapshot("ACTIVITY", activity.activityId, "system:voice-pipeline", awaiting ? "FOLLOWUP_MERGED" : "VOICE_PROCESSED", activity, completed);
-        await this.notifyResult(event.source.userId!, completed);
+        await this.snapshot("ACTIVITY", activity.activityId, "system:voice-pipeline", isCorrection ? "CORRECTION_PROPOSED" : awaiting ? "FOLLOWUP_MERGED" : "VOICE_PROCESSED", activity, completed);
+        await this.notifyResult(event.source.userId!, completed, isCorrection ? awaiting : undefined);
         accepted++;
       } catch (error) {
         const failedActivity = { ...activity, processingStatus: "FAILED_RETRYABLE" as const, flagReasons: [error instanceof Error ? error.message.slice(0, 300) : "Unknown processing error"], updatedAt: new Date().toISOString() };
@@ -78,7 +81,7 @@ export class LineService {
     await this.repository.saveActivity(processing);
     await this.snapshot("ACTIVITY", activityId, actorId, "RETRY_STARTED", before, processing);
     try {
-      const completed = await this.analyzeActivity(processing, before.farmerId);
+      const completed = await this.analyzeActivity(processing, before.farmerId, Boolean(before.correctionRequestedAt));
       await this.repository.saveActivity(completed);
       await this.snapshot("ACTIVITY", activityId, actorId, "RETRY_SUCCEEDED", processing, completed);
       if (farmer?.lineUserId) await this.notifyResult(farmer.lineUserId, completed).catch(() => undefined);
@@ -91,14 +94,14 @@ export class LineService {
     }
   }
 
-  private async analyzeActivity(activity: Activity, farmerId: string) {
+  private async analyzeActivity(activity: Activity, farmerId: string, isCorrection=false) {
     if (!this.analyzer || !activity.audioContentId) throw new Error("Voice analyzer or audio content is unavailable");
     const { audio, mimeType } = await this.downloadAudio(activity.audioContentId);
     const analysis = await this.analyzer.analyze(audio, mimeType);
     const extracted = mergeExtracted(activity, analysis.extracted);
     const transcript = activity.transcript ? `${activity.transcript}\nข้อมูลเพิ่มเติม: ${analysis.transcript}` : analysis.transcript;
     const registeredPlot = await this.matchRegisteredPlot(farmerId, extracted.plotId, analysis.plotName, analysis.transcript);
-    const resolved = registeredPlot ? { ...extracted, plotId:registeredPlot.plotId, crop:extracted.crop ?? registeredPlot.crop } : extracted;
+    const resolved = registeredPlot ? { ...extracted, plotId:registeredPlot.plotId, crop:(isCorrection ? analysis.extracted.crop : extracted.crop) ?? registeredPlot.crop } : extracted;
     const rule = evaluateIcsRisk(resolved, transcript);
     if ((extracted.plotId || analysis.plotName) && !registeredPlot) { rule.riskStatus = "NEEDS_REVIEW"; rule.reasons.push(`ไม่พบแปลง “${analysis.plotName ?? extracted.plotId}” ในทะเบียนของเกษตรกร`); }
     else if (registeredPlot) {
@@ -107,7 +110,7 @@ export class LineService {
     }
     const confidenceValues = Object.values(resolved.fieldConfidence);
     const confidence = confidenceValues.length ? confidenceValues.reduce((a, b) => a + b, 0) / confidenceValues.length : 0;
-    return { ...activity, ...(analysis.occurredAt && !activity.transcript ? { occurredAt:analysis.occurredAt } : {}), transcript, ...resolved, ...(registeredPlot ? { plotName:registeredPlot.name } : analysis.plotName ? { plotName:analysis.plotName } : {}), processingStatus:(rule.riskStatus === "PROVISIONALLY_CLEAR" ? "NEEDS_CONFIRMATION" : "NEEDS_REVIEW") as "NEEDS_CONFIRMATION" | "NEEDS_REVIEW", riskStatus:rule.riskStatus, confidence, flagReasons:rule.reasons, matchedTerms:rule.matchedTerms, updatedAt:new Date().toISOString() };
+    return { ...activity, ...(analysis.occurredAt && !activity.transcript ? { occurredAt:analysis.occurredAt } : {}), transcript, ...resolved, ...(registeredPlot ? { plotName:registeredPlot.name } : analysis.plotName ? { plotName:analysis.plotName } : {}), processingStatus:(rule.riskStatus === "PROVISIONALLY_CLEAR" ? (isCorrection ? "CORRECTION_CONFIRMATION" : "NEEDS_CONFIRMATION") : "NEEDS_REVIEW") as "CORRECTION_CONFIRMATION" | "NEEDS_CONFIRMATION" | "NEEDS_REVIEW", riskStatus:rule.riskStatus, confidence, flagReasons:rule.reasons, matchedTerms:rule.matchedTerms, revision:(activity.revision ?? 1) + (isCorrection ? 1 : 0), updatedAt:new Date().toISOString() };
   }
 
   private async matchRegisteredPlot(farmerId: string, plotId?: string, plotName?: string, transcript?: string) {
@@ -125,16 +128,23 @@ export class LineService {
 
   private async handleTextCommand(event: LineEvent) {
     const text = event.message?.text?.trim() ?? "";
-    const correction = text.match(/^ขอแก้ไข\s+(ACT-[A-Za-z0-9-]+)$/i);
-    if (correction && event.source.userId) {
+    const correction = text.match(/^(?:ขอ)?แก้ไข\s+(ACT-[A-Za-z0-9-]+)$/i);
+    const latestCorrection = /^(?:ขอ)?แก้ไขล่าสุด$/i.test(text);
+    if ((correction || latestCorrection) && event.source.userId) {
       const farmer = await this.repository.getFarmerByLineUserId(event.source.userId);
-      const activity = await this.repository.getActivity(correction[1]!);
+      const activeCorrection = farmer ? (await this.repository.listActivities()).find((item) => item.farmerId === farmer.farmerId && item.processingStatus === "CORRECTION_PENDING" && item.correctionRequestedAt && Date.now() - new Date(item.correctionRequestedAt).getTime() <= 30 * 60_000) : undefined;
+      if (activeCorrection) { await this.reply(event.replyToken, `กำลังรอเสียงแก้ไขรายการ ${activeCorrection.activityId} อยู่แล้ว กรุณาส่งเสียงได้เลย หรือรอให้ครบ 30 นาทีเพื่อเลือกรายการใหม่`); return true; }
+      const activity = correction
+        ? await this.repository.getActivity(correction[1]!)
+        : (await this.repository.listActivities()).filter((item) => item.farmerId === farmer?.farmerId && ["NEEDS_CONFIRMATION","COMPLETED"].includes(item.processingStatus) && !item.createdLotId).sort((a,b) => b.updatedAt.localeCompare(a.updatedAt))[0];
       if (!farmer || !activity || activity.farmerId !== farmer.farmerId) { await this.reply(event.replyToken, "ไม่พบรายการนี้ในบัญชีของคุณ กรุณาตรวจเลขที่รายการอีกครั้ง"); return true; }
-      if (activity.processingStatus !== "NEEDS_CONFIRMATION") { await this.reply(event.replyToken, "รายการนี้ไม่อยู่ในสถานะที่แก้ไขด้วยเสียงได้ เจ้าหน้าที่จะเป็นผู้ตรวจสอบต่อ"); return true; }
-      const awaiting = { ...activity, processingStatus:"AWAITING_FARMER" as const, updatedAt:new Date().toISOString() };
+      if (activity.createdLotId) { await this.reply(event.replyToken, "รายการนี้ถูกสร้างเป็นล็อตแล้ว กรุณาให้เจ้าหน้าที่ตรวจผลกระทบก่อนแก้ไข"); return true; }
+      if (!["NEEDS_CONFIRMATION","COMPLETED"].includes(activity.processingStatus)) { await this.reply(event.replyToken, "รายการนี้ไม่อยู่ในสถานะที่แก้ไขด้วยเสียงได้ เจ้าหน้าที่จะเป็นผู้ตรวจสอบต่อ"); return true; }
+      const now = new Date().toISOString();
+      const awaiting = { ...activity, processingStatus:"CORRECTION_PENDING" as const, correctionRequestedAt:now, revision:activity.revision ?? 1, updatedAt:now };
       await this.repository.saveActivity(awaiting);
-      await this.snapshot("ACTIVITY", activity.activityId, farmer.farmerId, "FARMER_REQUEST_CORRECTION", activity, awaiting);
-      await this.reply(event.replyToken, "ได้เลย กรุณาส่งเสียงเฉพาะข้อมูลที่ต้องการแก้ไข ระบบจะปรับรายการเดิมให้โดยไม่สร้างรายการใหม่");
+      await this.snapshot("ACTIVITY", activity.activityId, farmer.farmerId, "CORRECTION_REQUESTED", activity, awaiting);
+      await this.reply(event.replyToken, `กำลังแก้รายการ ${activity.activityId}\nกรุณาส่งเสียงภายใน 30 นาที โดยพูดเฉพาะข้อมูลที่ต้องแก้ เช่น “แก้เป็นแปลงสอง กิจกรรมถอนหญ้า”\nระบบจะปรับรายการเดิมและให้ตรวจอีกครั้ง`);
       return true;
     }
     const confirmation = text.match(/^ยืนยัน\s+(ACT-[A-Za-z0-9-]+)$/i);
@@ -142,12 +152,14 @@ export class LineService {
       const farmer = await this.repository.getFarmerByLineUserId(event.source.userId);
       const activity = await this.repository.getActivity(confirmation[1]!);
       if (!farmer || !activity || activity.farmerId !== farmer.farmerId) { await this.reply(event.replyToken, "ไม่พบรายการนี้ในบัญชีของคุณ กรุณาตรวจเลขที่รายการอีกครั้ง"); return true; }
-      if (activity.processingStatus !== "NEEDS_CONFIRMATION") { await this.reply(event.replyToken, "รายการนี้ไม่อยู่ในสถานะรอยืนยัน เจ้าหน้าที่จะเป็นผู้ตรวจสอบต่อ"); return true; }
+      if (!["NEEDS_CONFIRMATION","CORRECTION_CONFIRMATION"].includes(activity.processingStatus)) { await this.reply(event.replyToken, "รายการนี้ไม่อยู่ในสถานะรอยืนยัน เจ้าหน้าที่จะเป็นผู้ตรวจสอบต่อ"); return true; }
       const now = new Date().toISOString();
-      const confirmed = { ...activity, processingStatus:"COMPLETED" as const, updatedAt:now };
+      const wasCorrection = activity.processingStatus === "CORRECTION_CONFIRMATION";
+      const { correctionRequestedAt: _correctionRequestedAt, ...activityWithoutCorrection } = activity;
+      const confirmed = { ...activityWithoutCorrection, processingStatus:"COMPLETED" as const, updatedAt:now };
       await this.repository.saveActivity(confirmed);
-      await this.snapshot("ACTIVITY", activity.activityId, farmer.farmerId, "FARMER_CONFIRM", activity, confirmed);
-      await this.reply(event.replyToken, `ยืนยันบันทึก ${activity.activityId} เรียบร้อยแล้ว ✅`);
+      await this.snapshot("ACTIVITY", activity.activityId, farmer.farmerId, wasCorrection ? "CORRECTION_CONFIRMED" : "FARMER_CONFIRM", activity, confirmed);
+      await this.reply(event.replyToken, `ยืนยันบันทึก ${activity.activityId} เรียบร้อยแล้ว ✅\nหากพบว่าข้อมูลผิดภายหลัง ส่งข้อความ “แก้ไขล่าสุด” ได้`);
       return true;
     }
     const match = event.message?.text?.trim().match(/^ลงทะเบียน\s+([A-Za-z0-9_-]+)$/i);
@@ -176,9 +188,9 @@ export class LineService {
     if (!response.ok) throw new Error(`LINE reply API returned ${response.status}: ${(await response.text()).slice(0, 200)}`);
   }
 
-  private async notifyResult(lineUserId: string, activity: Activity) {
+  private async notifyResult(lineUserId: string, activity: Activity, beforeCorrection?: Activity) {
     const fallback = this.summary(activity.activityId, activity.transcript ?? "ไม่พบข้อความถอดเสียง", activity.riskStatus);
-    return this.outbox.enqueueLineMessage(lineUserId, fallback, resultFlexMessage(activity, fallback), activity.activityId);
+    return this.outbox.enqueueLineMessage(lineUserId, fallback, resultFlexMessage(activity, fallback, beforeCorrection), activity.activityId);
   }
 
   private async snapshot(entityType: "ACTIVITY" | "FARMER", entityId: string, actorId: string, action: string, before: unknown, after: unknown, reason?: string) {
@@ -188,18 +200,24 @@ export class LineService {
   private summary(id: string, transcript: string, risk: string) { const status = risk === "FLAGGED_HIGH" ? "พบประเด็นเสี่ยง รอเจ้าหน้าที่ตรวจ" : risk === "NEEDS_REVIEW" ? "ข้อมูลยังไม่ครบ รอเจ้าหน้าที่ตรวจ" : `บันทึกแล้ว รอยืนยัน\nหากข้อมูลถูกต้อง ส่ง: ยืนยัน ${id}`; return `รับและถอดเสียงสำเร็จ ✅\nเลขที่: ${id}\nข้อความ: ${transcript.slice(0, 700)}\nสถานะ: ${status}`; }
 }
 
-function resultFlexMessage(activity: Activity, fallback: string): Record<string, unknown> {
-  const confirmable = activity.processingStatus === "NEEDS_CONFIRMATION";
-  const title = activity.riskStatus === "FLAGGED_HIGH" ? "พบประเด็นที่ต้องตรวจ" : activity.riskStatus === "NEEDS_REVIEW" ? "ต้องตรวจข้อมูลเพิ่มเติม" : "บันทึกเสียงสำเร็จ";
+function resultFlexMessage(activity: Activity, fallback: string, beforeCorrection?: Activity): Record<string, unknown> {
+  const confirmable = activity.processingStatus === "NEEDS_CONFIRMATION" || activity.processingStatus === "CORRECTION_CONFIRMATION";
+  const title = beforeCorrection ? "ตรวจข้อมูลที่แก้ไข" : activity.riskStatus === "FLAGGED_HIGH" ? "พบประเด็นที่ต้องตรวจ" : activity.riskStatus === "NEEDS_REVIEW" ? "ต้องตรวจข้อมูลเพิ่มเติม" : "บันทึกเสียงสำเร็จ";
   const status = activity.riskStatus === "FLAGGED_HIGH" ? "รอเจ้าหน้าที่ตรวจความเสี่ยง" : activity.riskStatus === "NEEDS_REVIEW" ? "รอเจ้าหน้าที่ตรวจหรือขอข้อมูลเพิ่ม" : "รอคุณยืนยันความถูกต้อง";
   const facts = [
     ["แปลง", activity.plotName ?? activity.plotId ?? "ยังไม่ระบุ"], ["พืช", activity.crop ?? "ยังไม่ระบุ"], ["กิจกรรม", activity.activityType ?? "ยังไม่ระบุ"], ["สถานะ", status]
   ].map(([label,value]) => ({ type:"box", layout:"baseline", spacing:"sm", contents:[{ type:"text", text:label, color:"#6B7280", size:"sm", flex:2 },{ type:"text", text:value, color:"#17372A", size:"sm", wrap:true, flex:5 }] }));
+  const changed = beforeCorrection ? correctionChanges(beforeCorrection, activity) : [];
   const footer = confirmable ? { type:"box", layout:"vertical", spacing:"sm", contents:[
-    { type:"button", style:"primary", color:"#287A52", action:{ type:"message", label:"ยืนยันข้อมูล", text:`ยืนยัน ${activity.activityId}` } },
+    { type:"button", style:"primary", color:"#287A52", action:{ type:"message", label:beforeCorrection ? "ยืนยันการแก้ไข" : "ยืนยันข้อมูล", text:`ยืนยัน ${activity.activityId}` } },
     { type:"button", style:"secondary", action:{ type:"message", label:"ส่งเสียงแก้ไข", text:`ขอแก้ไข ${activity.activityId}` } }
   ] } : undefined;
-  return { type:"flex", altText:fallback.slice(0,400), contents:{ type:"bubble", header:{ type:"box", layout:"vertical", backgroundColor:"#EFF7F0", contents:[{ type:"text", text:title, weight:"bold", size:"lg", color:"#17372A" }] }, body:{ type:"box", layout:"vertical", spacing:"md", contents:[...facts,{ type:"separator", margin:"md" },{ type:"text", text:(activity.transcript ?? "ไม่พบข้อความถอดเสียง").slice(0,500), wrap:true, size:"sm", color:"#374151", margin:"md" },...(activity.flagReasons.length ? [{ type:"text", text:`หมายเหตุ: ${activity.flagReasons.join(" • ")}`.slice(0,500), wrap:true, size:"xs", color:"#8A4B08" }] : [])] }, ...(footer ? { footer } : {}) } };
+  return { type:"flex", altText:fallback.slice(0,400), contents:{ type:"bubble", header:{ type:"box", layout:"vertical", backgroundColor:"#EFF7F0", contents:[{ type:"text", text:title, weight:"bold", size:"lg", color:"#17372A" }] }, body:{ type:"box", layout:"vertical", spacing:"md", contents:[...(changed.length ? [{ type:"text", text:`เปลี่ยนแปลง: ${changed.join(" • ")}`.slice(0,500), wrap:true, size:"sm", weight:"bold", color:"#8A4B08" }] : []),...facts,{ type:"separator", margin:"md" },{ type:"text", text:(activity.transcript ?? "ไม่พบข้อความถอดเสียง").slice(0,500), wrap:true, size:"sm", color:"#374151", margin:"md" },...(activity.flagReasons.length ? [{ type:"text", text:`หมายเหตุ: ${activity.flagReasons.join(" • ")}`.slice(0,500), wrap:true, size:"xs", color:"#8A4B08" }] : [])] }, ...(footer ? { footer } : {}) } };
+}
+
+function correctionChanges(before: Activity, after: Activity) {
+  const fields: Array<[keyof Activity,string]> = [["plotName","แปลง"],["crop","พืช"],["activityType","กิจกรรม"],["inputsUsed","สิ่งที่ใช้"],["occurredAt","วันเวลา"],["harvestAmount","ปริมาณ"],["harvestUnit","หน่วย"]];
+  return fields.filter(([key]) => before[key] !== after[key]).map(([key,label]) => `${label}: ${String(before[key] ?? "ไม่ระบุ")} → ${String(after[key] ?? "ไม่ระบุ")}`);
 }
 
 function normalizeThai(value: string) { return value.trim().toLocaleLowerCase("th-TH").replace(/\s+/g, ""); }
