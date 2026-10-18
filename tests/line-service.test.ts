@@ -77,4 +77,27 @@ describe("LINE voice pipeline", () => {
     assert.equal((await repository.getActivity("ACT-1700000000000-123456"))?.processingStatus, "COMPLETED");
     assert.equal((await repository.listAuditEvents("ACT-1700000000000-123456"))[0]?.action, "FARMER_CONFIRM");
   });
+
+  it("sends an actionable Flex result and lets the farmer request a correction", async () => {
+    const repository = new MemoryRepository();
+    await repository.saveFarmer({ farmerId:"F-001", memberCode:"M001", displayName:"ผู้ทดสอบ", lineUserId:"U-REAL", status:"ACTIVE" });
+    await repository.savePlot({ plotId:"P-001", farmerId:"F-001", name:"แปลงหนึ่ง", crop:"ข้าว", status:"ACTIVE" });
+    const requestBodies: unknown[] = [];
+    globalThis.fetch = async (input, init) => {
+      if (!String(input).includes("api-data.line.me") && init?.body) requestBodies.push(JSON.parse(String(init.body)));
+      return String(input).includes("api-data.line.me") ? new Response(Buffer.from("audio"), { status:200, headers:{ "content-type":"audio/mp4" } }) : new Response("{}", { status:200 });
+    };
+    const analyzer: VoiceAnalyzer = { analyze: async () => ({ transcript:"วันนี้ถอนหญ้าที่แปลงหนึ่ง", plotName:"แปลงหนึ่ง", extracted:{ plotId:"แปลงหนึ่ง", crop:"ข้าว", activityType:"ถอนหญ้า", isHarvesting:false, fieldConfidence:{ plotId:0.95,crop:0.95,activityType:0.95 } } }) };
+    const service = new LineService(config, repository, analyzer);
+    const voice = Buffer.from(JSON.stringify({ events:[{ type:"message", webhookEventId:"voice-flex", replyToken:"reply-flex", timestamp:1700000008000, source:{ type:"user", userId:"U-REAL" }, message:{ type:"audio", id:"audio-flex1", duration:3000 } }] }));
+    await service.acceptWebhook(voice, sign(voice));
+    const activity = (await repository.listActivities())[0]!;
+    const push = requestBodies.find((body) => JSON.stringify(body).includes('"type":"flex"'));
+    assert.ok(push);
+    assert.match(JSON.stringify(push), /ยืนยันข้อมูล/);
+    const correction = Buffer.from(JSON.stringify({ events:[{ type:"message", webhookEventId:"correct-flex", replyToken:"reply-correct", timestamp:1700000009000, source:{ type:"user", userId:"U-REAL" }, message:{ type:"text", id:"text-correct", text:`ขอแก้ไข ${activity.activityId}` } }] }));
+    await service.acceptWebhook(correction, sign(correction));
+    assert.equal((await repository.getActivity(activity.activityId))?.processingStatus, "AWAITING_FARMER");
+    assert.equal((await repository.listAuditEvents(activity.activityId)).at(-1)?.action, "FARMER_REQUEST_CORRECTION");
+  });
 });

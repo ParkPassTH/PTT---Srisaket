@@ -273,3 +273,14 @@
 - `npm audit --omit=dev --audit-level=high` ผ่าน 0 vulnerabilities; automated tests ผ่าน 27/27
 - เพิ่ม audit snapshot เมื่อ Admin สั่ง process/retry คิว
 - เพิ่ม automated tests กรณีส่งล้มเหลว ส่งซ้ำสำเร็จโดยไม่สร้างรายการซ้ำ และเข้าสู่ dead letter
+
+## 2026-10-18 — Actionable LINE result cards
+
+- เพิ่ม Flex Message สรุปแปลง พืช กิจกรรม ข้อความถอดเสียง และสถานะหลังประมวลผล
+- เพิ่มปุ่ม `ยืนยันข้อมูล` ซึ่งส่งคำสั่งยืนยันรายการให้อัตโนมัติ ไม่ต้องคัดลอก Activity ID
+- เพิ่มปุ่ม `ส่งเสียงแก้ไข` ซึ่งเปลี่ยนรายการเป็น `AWAITING_FARMER`; เสียงถัดไปจะเติม activity เดิม
+- เก็บ snapshot `FARMER_REQUEST_CORRECTION` ก่อน/หลังทุกครั้งที่เกษตรกรขอแก้ไข
+- เก็บ Flex payload ใน Outbox เพื่อให้ retry ส่งข้อความรูปแบบเดิมได้ ไม่ลดรูปเป็นข้อความธรรมดา
+- Google Sheets เพิ่มคอลัมน์ `line_message` ในชีต Outbox อัตโนมัติโดยไม่กระทบข้อมูลเดิม
+- typecheck, automated tests 29/29 และ production build ผ่าน
+- ยืนยันการจัดลำดับว่า durable multi-user/RBAC เป็นงานท้ายสุดตามคำขอผู้ใช้

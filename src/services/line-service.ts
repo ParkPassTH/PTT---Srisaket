@@ -55,7 +55,7 @@ export class LineService {
         const completed = await this.analyzeActivity(activity, farmer.farmerId);
         await this.repository.saveActivity(completed);
         await this.snapshot("ACTIVITY", activity.activityId, "system:voice-pipeline", awaiting ? "FOLLOWUP_MERGED" : "VOICE_PROCESSED", activity, completed);
-        await this.outbox.enqueueLine(event.source.userId!, this.summary(completed.activityId, completed.transcript!, completed.riskStatus), completed.activityId);
+        await this.notifyResult(event.source.userId!, completed);
         accepted++;
       } catch (error) {
         const failedActivity = { ...activity, processingStatus: "FAILED_RETRYABLE" as const, flagReasons: [error instanceof Error ? error.message.slice(0, 300) : "Unknown processing error"], updatedAt: new Date().toISOString() };
@@ -81,7 +81,7 @@ export class LineService {
       const completed = await this.analyzeActivity(processing, before.farmerId);
       await this.repository.saveActivity(completed);
       await this.snapshot("ACTIVITY", activityId, actorId, "RETRY_SUCCEEDED", processing, completed);
-      if (farmer?.lineUserId) await this.outbox.enqueueLine(farmer.lineUserId, this.summary(completed.activityId, completed.transcript!, completed.riskStatus), completed.activityId).catch(() => undefined);
+      if (farmer?.lineUserId) await this.notifyResult(farmer.lineUserId, completed).catch(() => undefined);
       return completed;
     } catch (error) {
       const failed = { ...processing, processingStatus:"FAILED_RETRYABLE" as const, flagReasons:[error instanceof Error ? error.message.slice(0,300) : "Unknown processing error"], updatedAt:new Date().toISOString() };
@@ -125,6 +125,18 @@ export class LineService {
 
   private async handleTextCommand(event: LineEvent) {
     const text = event.message?.text?.trim() ?? "";
+    const correction = text.match(/^ขอแก้ไข\s+(ACT-[A-Za-z0-9-]+)$/i);
+    if (correction && event.source.userId) {
+      const farmer = await this.repository.getFarmerByLineUserId(event.source.userId);
+      const activity = await this.repository.getActivity(correction[1]!);
+      if (!farmer || !activity || activity.farmerId !== farmer.farmerId) { await this.reply(event.replyToken, "ไม่พบรายการนี้ในบัญชีของคุณ กรุณาตรวจเลขที่รายการอีกครั้ง"); return true; }
+      if (activity.processingStatus !== "NEEDS_CONFIRMATION") { await this.reply(event.replyToken, "รายการนี้ไม่อยู่ในสถานะที่แก้ไขด้วยเสียงได้ เจ้าหน้าที่จะเป็นผู้ตรวจสอบต่อ"); return true; }
+      const awaiting = { ...activity, processingStatus:"AWAITING_FARMER" as const, updatedAt:new Date().toISOString() };
+      await this.repository.saveActivity(awaiting);
+      await this.snapshot("ACTIVITY", activity.activityId, farmer.farmerId, "FARMER_REQUEST_CORRECTION", activity, awaiting);
+      await this.reply(event.replyToken, "ได้เลย กรุณาส่งเสียงเฉพาะข้อมูลที่ต้องการแก้ไข ระบบจะปรับรายการเดิมให้โดยไม่สร้างรายการใหม่");
+      return true;
+    }
     const confirmation = text.match(/^ยืนยัน\s+(ACT-[A-Za-z0-9-]+)$/i);
     if (confirmation && event.source.userId) {
       const farmer = await this.repository.getFarmerByLineUserId(event.source.userId);
@@ -164,11 +176,30 @@ export class LineService {
     if (!response.ok) throw new Error(`LINE reply API returned ${response.status}: ${(await response.text()).slice(0, 200)}`);
   }
 
+  private async notifyResult(lineUserId: string, activity: Activity) {
+    const fallback = this.summary(activity.activityId, activity.transcript ?? "ไม่พบข้อความถอดเสียง", activity.riskStatus);
+    return this.outbox.enqueueLineMessage(lineUserId, fallback, resultFlexMessage(activity, fallback), activity.activityId);
+  }
+
   private async snapshot(entityType: "ACTIVITY" | "FARMER", entityId: string, actorId: string, action: string, before: unknown, after: unknown, reason?: string) {
     await this.repository.saveAuditEvent({ auditId:createId("AUD"), entityType, entityId, actorId, action, ...(reason ? { reason } : {}), ...(before !== undefined ? { before:structuredClone(before) } : {}), ...(after !== undefined ? { after:structuredClone(after) } : {}), occurredAt:new Date().toISOString() });
   }
 
   private summary(id: string, transcript: string, risk: string) { const status = risk === "FLAGGED_HIGH" ? "พบประเด็นเสี่ยง รอเจ้าหน้าที่ตรวจ" : risk === "NEEDS_REVIEW" ? "ข้อมูลยังไม่ครบ รอเจ้าหน้าที่ตรวจ" : `บันทึกแล้ว รอยืนยัน\nหากข้อมูลถูกต้อง ส่ง: ยืนยัน ${id}`; return `รับและถอดเสียงสำเร็จ ✅\nเลขที่: ${id}\nข้อความ: ${transcript.slice(0, 700)}\nสถานะ: ${status}`; }
+}
+
+function resultFlexMessage(activity: Activity, fallback: string): Record<string, unknown> {
+  const confirmable = activity.processingStatus === "NEEDS_CONFIRMATION";
+  const title = activity.riskStatus === "FLAGGED_HIGH" ? "พบประเด็นที่ต้องตรวจ" : activity.riskStatus === "NEEDS_REVIEW" ? "ต้องตรวจข้อมูลเพิ่มเติม" : "บันทึกเสียงสำเร็จ";
+  const status = activity.riskStatus === "FLAGGED_HIGH" ? "รอเจ้าหน้าที่ตรวจความเสี่ยง" : activity.riskStatus === "NEEDS_REVIEW" ? "รอเจ้าหน้าที่ตรวจหรือขอข้อมูลเพิ่ม" : "รอคุณยืนยันความถูกต้อง";
+  const facts = [
+    ["แปลง", activity.plotName ?? activity.plotId ?? "ยังไม่ระบุ"], ["พืช", activity.crop ?? "ยังไม่ระบุ"], ["กิจกรรม", activity.activityType ?? "ยังไม่ระบุ"], ["สถานะ", status]
+  ].map(([label,value]) => ({ type:"box", layout:"baseline", spacing:"sm", contents:[{ type:"text", text:label, color:"#6B7280", size:"sm", flex:2 },{ type:"text", text:value, color:"#17372A", size:"sm", wrap:true, flex:5 }] }));
+  const footer = confirmable ? { type:"box", layout:"vertical", spacing:"sm", contents:[
+    { type:"button", style:"primary", color:"#287A52", action:{ type:"message", label:"ยืนยันข้อมูล", text:`ยืนยัน ${activity.activityId}` } },
+    { type:"button", style:"secondary", action:{ type:"message", label:"ส่งเสียงแก้ไข", text:`ขอแก้ไข ${activity.activityId}` } }
+  ] } : undefined;
+  return { type:"flex", altText:fallback.slice(0,400), contents:{ type:"bubble", header:{ type:"box", layout:"vertical", backgroundColor:"#EFF7F0", contents:[{ type:"text", text:title, weight:"bold", size:"lg", color:"#17372A" }] }, body:{ type:"box", layout:"vertical", spacing:"md", contents:[...facts,{ type:"separator", margin:"md" },{ type:"text", text:(activity.transcript ?? "ไม่พบข้อความถอดเสียง").slice(0,500), wrap:true, size:"sm", color:"#374151", margin:"md" },...(activity.flagReasons.length ? [{ type:"text", text:`หมายเหตุ: ${activity.flagReasons.join(" • ")}`.slice(0,500), wrap:true, size:"xs", color:"#8A4B08" }] : [])] }, ...(footer ? { footer } : {}) } };
 }
 
 function normalizeThai(value: string) { return value.trim().toLocaleLowerCase("th-TH").replace(/\s+/g, ""); }

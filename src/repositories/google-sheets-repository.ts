@@ -10,7 +10,7 @@ const TABLES = {
   Reviews: ["review_id", "activity_id", "reviewer_id", "decision", "reason", "reviewed_at"],
   Lots: ["lot_id", "activity_id", "farmer_id", "farmer_name", "plot_name", "crop", "quantity", "unit", "harvest_date", "inventory_status", "trace_token", "created_at", "updated_at"],
   AuditEvents: ["audit_id", "entity_type", "entity_id", "actor_id", "action", "reason", "before", "after", "occurred_at"],
-  Outbox: ["message_id", "channel", "recipient", "body", "related_entity_id", "status", "attempts", "max_attempts", "next_attempt_at", "last_error", "created_at", "updated_at"]
+  Outbox: ["message_id", "channel", "recipient", "body", "line_message", "related_entity_id", "status", "attempts", "max_attempts", "next_attempt_at", "last_error", "created_at", "updated_at"]
 } as const;
 
 type TableName = keyof typeof TABLES;
@@ -138,4 +138,4 @@ function activityToRow(x: Activity) { return mapKeys(x); }
 function reviewFromRow(r: Row): Review { return { reviewId:r.review_id!,activityId:r.activity_id!,reviewerId:r.reviewer_id!,decision:r.decision as Review["decision"],reason:r.reason!,reviewedAt:r.reviewed_at! }; }
 function lotFromRow(r: Row): Lot { return { lotId:r.lot_id!,activityId:r.activity_id!,farmerId:r.farmer_id!,farmerName:r.farmer_name!,plotName:r.plot_name!,crop:r.crop!,quantity:Number(r.quantity),unit:r.unit!,harvestDate:r.harvest_date!,inventoryStatus:r.inventory_status as Lot["inventoryStatus"],traceToken:r.trace_token!,createdAt:r.created_at!,updatedAt:r.updated_at! }; }
 function auditFromRow(r: Row): AuditEvent { return { auditId:r.audit_id!,entityType:r.entity_type as AuditEvent["entityType"],entityId:r.entity_id!,actorId:r.actor_id!,action:r.action!,...(r.reason?{reason:r.reason}:{}),...(r.before?{before:json(r.before,null)}:{}),...(r.after?{after:json(r.after,null)}:{}),occurredAt:r.occurred_at! }; }
-function outboxFromRow(r: Row): OutboxMessage { return { messageId:r.message_id!, channel:"LINE", recipient:r.recipient!, body:r.body!, ...(r.related_entity_id?{relatedEntityId:r.related_entity_id}:{}), status:r.status as OutboxMessage["status"], attempts:Number(r.attempts||0), maxAttempts:Number(r.max_attempts||5), nextAttemptAt:r.next_attempt_at!, ...(r.last_error?{lastError:r.last_error}:{}), createdAt:r.created_at!, updatedAt:r.updated_at! }; }
+function outboxFromRow(r: Row): OutboxMessage { return { messageId:r.message_id!, channel:"LINE", recipient:r.recipient!, body:r.body!, ...(r.line_message?{lineMessage:json<Record<string,unknown>>(r.line_message,{})}:{}), ...(r.related_entity_id?{relatedEntityId:r.related_entity_id}:{}), status:r.status as OutboxMessage["status"], attempts:Number(r.attempts||0), maxAttempts:Number(r.max_attempts||5), nextAttemptAt:r.next_attempt_at!, ...(r.last_error?{lastError:r.last_error}:{}), createdAt:r.created_at!, updatedAt:r.updated_at! }; }

@@ -26,8 +26,8 @@
 | F-005A | AI provider abstraction (OpenAI/Gemini) | ระบบ/Developer | Partial | มี VoiceAnalyzer contract และ Gemini adapter; OpenAI adapter ยังไม่เชื่อม |
 | F-006 | สกัดข้อมูลกิจกรรมตาม schema | ระบบ | Implemented | Gemini structured JSON + Zod validation; invalid output เป็น FAILED_RETRYABLE |
 | F-007 | ICS deterministic rule engine | ICS | In Progress | engine และ tests พร้อม; รอรายการสารฉบับอนุมัติ |
-| F-008 | Farmer confirmation ผ่าน LINE | เกษตรกร | Partial | คำสั่ง `ยืนยัน <Activity ID>` พร้อมและมี audit; รอแก้ไขรายช่อง |
-| F-009 | Flex Message ผลสำเร็จ/ต้องตรวจ/ผิดพลาด | เกษตรกร | Planned | ภาษาไทยชัดเจน ไม่กล่าวโทษ และไม่พึ่งสีอย่างเดียว |
+| F-008 | Farmer confirmation ผ่าน LINE | เกษตรกร | Implemented | กดยืนยันหรือขอแก้ไขจากการ์ด LINE; เสียงแก้ไขเติมรายการเดิมและมี audit |
+| F-009 | Flex Message ผลสำเร็จ/ต้องตรวจ/ผิดพลาด | เกษตรกร | Done | การ์ดภาษาไทยสรุปแปลง พืช กิจกรรม สถานะ พร้อมปุ่มที่มีข้อความกำกับ ไม่พึ่งสีอย่างเดียว |
 | F-010 | Authentication สำหรับ Dashboard | เจ้าหน้าที่ | Deferred | local secure session พร้อม; ผู้ใช้ขอพัก durable user store ไว้ก่อน |
 | F-011 | Role-based access control | เจ้าหน้าที่ | Deferred | API role checks เดิมยังทำงาน; พัก user management ตามคำขอผู้ใช้ |
 | F-012 | Dashboard ภาพรวม | เจ้าหน้าที่ | Done | แสดงคิวเร่งด่วน งานค้าง สุขภาพระบบ และ drill-down ได้ |
@@ -98,3 +98,4 @@
 | 18 ต.ค. 2569 | เพิ่มการต่อบทสนทนาในรายการเดิมและจับคู่แปลงอัตโนมัติ | ลดรายการซ้ำและไม่ถามข้อมูลที่มีอยู่แล้วในทะเบียน | Codex |
 | 18 ต.ค. 2569 | เพิ่ม LINE Outbox, retry, dead-letter และ readiness | ป้องกันข้อความแจ้งเตือนหายเมื่อ LINE ล่มและให้ Admin กู้คิวได้ | Codex |
 | 18 ต.ค. 2569 | พัก multi-user/RBAC และเพิ่ม backup/restore กับ CI | จัดลำดับตามคำขอผู้ใช้ โดยเร่งความปลอดภัยข้อมูลและการตรวจ build ก่อน | Codex |
+| 18 ต.ค. 2569 | เพิ่ม LINE Flex Message และ correction flow แบบกดปุ่ม | ลดการพิมพ์ Activity ID และให้เสียงแก้ไขกลับเข้า activity เดิมโดยอัตโนมัติ | Codex |

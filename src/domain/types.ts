@@ -143,6 +143,7 @@ export interface OutboxMessage {
   channel: "LINE";
   recipient: string;
   body: string;
+  lineMessage?: Record<string, unknown>;
   relatedEntityId?: string;
   status: "PENDING" | "DELIVERED" | "DEAD_LETTER";
   attempts: number;

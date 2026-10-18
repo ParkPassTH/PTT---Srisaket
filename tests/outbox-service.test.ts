@@ -42,4 +42,16 @@ describe("durable LINE outbox", () => {
     assert.equal(message.status, "DEAD_LETTER");
     assert.equal(message.attempts, 5);
   });
+
+  it("persists and delivers a Flex Message payload", async () => {
+    const repository = new MemoryRepository();
+    let sentBody = "";
+    globalThis.fetch = async (_input, init) => { sentBody = String(init?.body); return new Response("{}", { status:200 }); };
+    const service = new OutboxService(config, repository);
+    const flex = { type:"flex", altText:"ผลการบันทึก", contents:{ type:"bubble" } };
+    const message = await service.enqueueLineMessage("U-001", "ผลการบันทึก", flex, "ACT-001");
+    assert.equal(message.status, "DELIVERED");
+    assert.deepEqual((await repository.getOutboxMessage(message.messageId))?.lineMessage, flex);
+    assert.match(sentBody, /\"type\":\"flex\"/);
+  });
 });

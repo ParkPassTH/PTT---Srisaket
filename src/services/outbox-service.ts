@@ -8,9 +8,17 @@ export class OutboxService {
   constructor(private readonly config: AppConfig, private readonly repository: Repository) {}
 
   async enqueueLine(recipient: string, body: string, relatedEntityId?: string) {
+    return this.enqueue(recipient, body, undefined, relatedEntityId);
+  }
+
+  async enqueueLineMessage(recipient: string, body: string, lineMessage: Record<string, unknown>, relatedEntityId?: string) {
+    return this.enqueue(recipient, body, lineMessage, relatedEntityId);
+  }
+
+  private async enqueue(recipient: string, body: string, lineMessage?: Record<string, unknown>, relatedEntityId?: string) {
     const now = new Date().toISOString();
     const message: OutboxMessage = {
-      messageId:createId("MSG"), channel:"LINE", recipient, body:body.slice(0,5000),
+      messageId:createId("MSG"), channel:"LINE", recipient, body:body.slice(0,5000), ...(lineMessage ? { lineMessage } : {}),
       ...(relatedEntityId ? { relatedEntityId } : {}), status:"PENDING", attempts:0, maxAttempts:5,
       nextAttemptAt:now, createdAt:now, updatedAt:now
     };
@@ -38,7 +46,7 @@ export class OutboxService {
   private async deliver(before: OutboxMessage) {
     const attempts = before.attempts + 1;
     try {
-      await sendLineText(this.config, before.recipient, before.body);
+      await sendLineMessage(this.config, before.recipient, before.lineMessage ?? { type:"text", text:before.body.slice(0,5000) });
       const delivered = { ...before, status:"DELIVERED" as const, attempts, updatedAt:new Date().toISOString() };
       await this.repository.saveOutboxMessage(delivered);
       return delivered;
@@ -56,8 +64,8 @@ export class OutboxService {
   }
 }
 
-async function sendLineText(config: AppConfig, lineUserId: string, text: string) {
+async function sendLineMessage(config: AppConfig, lineUserId: string, message: Record<string, unknown>) {
   if (!config.LINE_CHANNEL_ACCESS_TOKEN) throw new Error("LINE_CHANNEL_ACCESS_TOKEN is not configured");
-  const response = await fetch("https://api.line.me/v2/bot/message/push", { method:"POST", headers:{ Authorization:`Bearer ${config.LINE_CHANNEL_ACCESS_TOKEN}`, "Content-Type":"application/json" }, body:JSON.stringify({ to:lineUserId, messages:[{ type:"text", text:text.slice(0,5000) }] }), signal:AbortSignal.timeout(10_000) });
+  const response = await fetch("https://api.line.me/v2/bot/message/push", { method:"POST", headers:{ Authorization:`Bearer ${config.LINE_CHANNEL_ACCESS_TOKEN}`, "Content-Type":"application/json" }, body:JSON.stringify({ to:lineUserId, messages:[message] }), signal:AbortSignal.timeout(10_000) });
   if (!response.ok) throw new Error(`LINE push API returned ${response.status}: ${(await response.text()).slice(0,200)}`);
 }

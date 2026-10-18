@@ -34,7 +34,7 @@
 - [x] T-105 สร้าง Google Sheets adapter — F-023
 - [x] T-105A จัดทำคู่มือต่อ Sheets/LINE/OpenAI และ acceptance tests — F-023, F-029, F-030
 - [x] T-106 สร้าง error model และ structured logging — F-025, F-026
-- [~] T-107 สร้าง authentication/session และ RBAC — พักตามคำขอผู้ใช้; ใช้บัญชีผู้ดูแลเดิมชั่วคราว
+- [~] T-107 สร้าง authentication/session และ RBAC — ย้ายเป็นงานลำดับสุดท้ายตามคำขอผู้ใช้; คงระบบเปิดด้วยบัญชีผู้ดูแลเดิมก่อน
 - [x] T-108 ตั้งค่า unit/integration test และ CI — local suite และ GitHub Actions พร้อม
 
 ## Phase 2 — LINE และ Voice Pipeline
@@ -47,8 +47,8 @@
 - [x] T-205A AI provider contract และ Gemini adapter — F-005A (OpenAI adapter ยังไม่รวม)
 - [x] T-206 structured extraction + schema validation — F-006
 - [-] T-207 deterministic ICS rule engine + test fixtures — engine พร้อม รอ approved rules
-- [-] T-208 confirmation and correction conversation — ยืนยันรายการผ่าน LINE พร้อม; รอแก้ไขรายช่อง — F-008
-- [ ] T-209 Flex Message templates + accessible wording — F-009
+- [x] T-208 confirmation and correction conversation — กดยืนยัน/ขอแก้ไขผ่าน LINE และเสียงถัดไปเติมรายการเดิม — F-008
+- [x] T-209 Flex Message templates + accessible wording — สรุปข้อมูลและสถานะด้วยข้อความพร้อมปุ่ม ไม่พึ่งสี — F-009
 - [-] T-210 retry/outbox/dead-letter workflow — LINE outbox, backoff, dead-letter และหน้ากู้พร้อม; รอ cron worker — F-024
 - [x] T-211 audit snapshots ของ LINE lifecycle และ account linking — F-022
 - [x] T-212 ผูกเสียงตอบข้อมูลเพิ่มเข้ากับ activity ที่รอเกษตรกรล่าสุด — F-032
