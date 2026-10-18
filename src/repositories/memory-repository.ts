@@ -37,6 +37,7 @@ export class MemoryRepository implements Repository {
   async findActivityBySourceEvent(id: string) { const item = [...this.activities.values()].find((value) => value.sourceEventId === id || value.sourceEventIds?.includes(id)); return item ? structuredClone(item) : undefined; }
   async saveActivity(item: Activity) { this.activities.set(item.activityId, structuredClone(item)); }
   async listReviews(id: string) { return this.reviews.filter((item) => item.activityId === id).map((item) => structuredClone(item)); }
+  async listAllReviews() { return this.reviews.map((item) => structuredClone(item)); }
   async saveReview(item: Review) { this.reviews.push(structuredClone(item)); }
   async listLots() { return [...this.lots.values()].map((item) => structuredClone(item)); }
   async getLot(id: string) { const item = this.lots.get(id); return item ? structuredClone(item) : undefined; }
@@ -52,6 +53,7 @@ export class MemoryRepository implements Repository {
   async savePlot(item: Plot) { this.plots.set(item.plotId, structuredClone(item)); }
   async saveAuditEvent(item: AuditEvent) { this.auditEvents.push(structuredClone(item)); }
   async listAuditEvents(id: string) { return this.auditEvents.filter((item) => item.entityId === id).map((item) => structuredClone(item)); }
+  async listAllAuditEvents() { return this.auditEvents.map((item) => structuredClone(item)); }
   async listOutbox() { return [...this.outbox.values()].sort((a,b) => b.createdAt.localeCompare(a.createdAt)).map((item) => structuredClone(item)); }
   async getOutboxMessage(id: string) { const item=this.outbox.get(id); return item ? structuredClone(item) : undefined; }
   async saveOutboxMessage(item: OutboxMessage) { this.outbox.set(item.messageId, structuredClone(item)); }

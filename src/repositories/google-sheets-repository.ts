@@ -102,6 +102,7 @@ export class GoogleSheetsRepository implements Repository {
   async findActivityBySourceEvent(id: string) { return (await this.listActivities()).find((x) => x.sourceEventId === id || x.sourceEventIds?.includes(id)); }
   async saveActivity(x: Activity) { await this.upsert("Activities", "activity_id", x.activityId, activityToRow(x)); }
   async listReviews(id: string) { return (await this.rows("Reviews")).map(reviewFromRow).filter((x) => x.activityId === id); }
+  async listAllReviews() { return (await this.rows("Reviews")).map(reviewFromRow); }
   async saveReview(x: Review) { await this.append("Reviews", mapKeys(x)); }
   async listLots() { return (await this.rows("Lots")).map(lotFromRow); }
   async getLot(id: string) { return (await this.listLots()).find((x) => x.lotId === id); }
@@ -117,6 +118,7 @@ export class GoogleSheetsRepository implements Repository {
   async savePlot(x: Plot) { await this.upsert("Plots", "plot_id", x.plotId, mapKeys(x)); }
   async saveAuditEvent(x: AuditEvent) { await this.append("AuditEvents", mapKeys(x)); }
   async listAuditEvents(id: string) { return (await this.rows("AuditEvents")).map(auditFromRow).filter((x) => x.entityId === id); }
+  async listAllAuditEvents() { return (await this.rows("AuditEvents")).map(auditFromRow); }
   async listOutbox() { return (await this.rows("Outbox")).map(outboxFromRow).sort((a,b) => b.createdAt.localeCompare(a.createdAt)); }
   async getOutboxMessage(id: string) { return (await this.listOutbox()).find((x) => x.messageId === id); }
   async saveOutboxMessage(x: OutboxMessage) { await this.upsert("Outbox", "message_id", x.messageId, mapKeys(x)); }

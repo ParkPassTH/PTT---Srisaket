@@ -258,5 +258,18 @@
 - เพิ่ม Admin API และหน้า Dashboard สำหรับดูจำนวนค้าง ลองส่งงานที่ถึงเวลา และกู้ข้อความรายรายการ
 - เพิ่ม `/ready` เพื่อตรวจ data store และความครบถ้วนของ LINE/AI configuration โดยไม่เปิดเผย secret
 - เพิ่ม Vercel rewrite สำหรับ `/ready` เพื่อไม่ให้ SPA fallback รับ route นี้แทน backend
+
+## 2026-10-18 — Backup/restore and continuous verification
+
+- พักงาน durable multi-user/RBAC ตามคำขอผู้ใช้ โดยคง authentication และ API role checks เดิม
+- เพิ่ม JSON backup ครบ Farmers, Plots, Activities, Reviews, Lots, AuditEvents และ Outbox
+- ใช้ SHA-256 บน canonical JSON เพื่อให้ checksum ไม่เปลี่ยนตามลำดับ key
+- เพิ่ม validate-first และจำกัดไฟล์ 5 MB ก่อน restore
+- restore แบบ merge-only: upsert ข้อมูลหลัก, ไม่ลบข้อมูลปัจจุบัน และไม่เพิ่ม Review/Audit เดิมซ้ำ
+- เก็บ audit `BACKUP_EXPORT` และ `BACKUP_MERGE_RESTORE` พร้อม checksum/counts
+- เพิ่มหน้า Backup/Restore ในเมนูรายงาน พร้อมแสดงจำนวนข้อมูลหลังตรวจไฟล์
+- เพิ่ม GitHub Actions workflow สำหรับ Node 22, `npm ci --ignore-scripts` และ `npm run check`
+- เพิ่ม security regression tests สำหรับ Helmet headers, readiness และการป้องกัน backup endpoint
+- `npm audit --omit=dev --audit-level=high` ผ่าน 0 vulnerabilities; automated tests ผ่าน 27/27
 - เพิ่ม audit snapshot เมื่อ Admin สั่ง process/retry คิว
 - เพิ่ม automated tests กรณีส่งล้มเหลว ส่งซ้ำสำเร็จโดยไม่สร้างรายการซ้ำ และเข้าสู่ dead letter

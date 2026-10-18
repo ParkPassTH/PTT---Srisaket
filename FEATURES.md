@@ -28,8 +28,8 @@
 | F-007 | ICS deterministic rule engine | ICS | In Progress | engine และ tests พร้อม; รอรายการสารฉบับอนุมัติ |
 | F-008 | Farmer confirmation ผ่าน LINE | เกษตรกร | Partial | คำสั่ง `ยืนยัน <Activity ID>` พร้อมและมี audit; รอแก้ไขรายช่อง |
 | F-009 | Flex Message ผลสำเร็จ/ต้องตรวจ/ผิดพลาด | เกษตรกร | Planned | ภาษาไทยชัดเจน ไม่กล่าวโทษ และไม่พึ่งสีอย่างเดียว |
-| F-010 | Authentication สำหรับ Dashboard | เจ้าหน้าที่ | In Progress | local secure session พร้อม; รอ durable session/identity provider |
-| F-011 | Role-based access control | เจ้าหน้าที่ | In Progress | API role checks พร้อม; รอ user management |
+| F-010 | Authentication สำหรับ Dashboard | เจ้าหน้าที่ | Deferred | local secure session พร้อม; ผู้ใช้ขอพัก durable user store ไว้ก่อน |
+| F-011 | Role-based access control | เจ้าหน้าที่ | Deferred | API role checks เดิมยังทำงาน; พัก user management ตามคำขอผู้ใช้ |
 | F-012 | Dashboard ภาพรวม | เจ้าหน้าที่ | Done | แสดงคิวเร่งด่วน งานค้าง สุขภาพระบบ และ drill-down ได้ |
 | F-013 | Review queue และ filter | ICS | In Progress | ค้น/กรอง risk และข้อความได้; รอ date/status filters |
 | F-014 | Review detail พร้อมหลักฐาน | ICS | In Progress | transcript/extraction/rule/audit พร้อม; รอ audio player |
@@ -47,9 +47,9 @@
 | F-026 | Validation และ error handling | ทุกคน | Done | error ให้ next step และ API ใช้รูปแบบคงที่ |
 | F-027 | Responsive + WCAG 2.2 AA baseline | เจ้าหน้าที่ | In Progress | keyboard/focus/44px/mobile พร้อม; รอ formal audit |
 | F-028 | Environment configuration | Developer | Done | `.env.example`, startup validation, no secret in repo |
-| F-029 | Automated tests และ CI | Developer | In Progress | tests/build พร้อม; รอ hosted CI workflow |
+| F-029 | Automated tests และ CI | Developer | Done | GitHub Actions ตรวจ typecheck, tests และ production build ทุก push/PR |
 | F-030 | Free-tier deployment guide | Developer/Admin | In Progress | Render guide/blueprint พร้อม; รอ deploy จริงและ verify |
-| F-031 | Backup/export และ restore drill | Admin | Planned | export ได้และมีขั้นตอนทดสอบ restore |
+| F-031 | Backup/export และ restore drill | Admin | Done | JSON ครบทุก entity, SHA-256 checksum, validate-first และ merge-only restore พร้อม audit |
 | F-032 | ต่อบทสนทนาในกิจกรรมเดิม | เกษตรกร | Implemented | หลังเจ้าหน้าที่ขอข้อมูล เสียงถัดไปเติม activity เดิมและเก็บ source event ทุกครั้ง |
 | F-033 | จับคู่แปลงอัตโนมัติจากทะเบียน | เกษตรกร/ICS | Implemented | รองรับรหัส ชื่อ “แปลง 1/แปลงหนึ่ง” และเลือกแปลงเดียวอัตโนมัติ พร้อมเติมพืชจากทะเบียน |
 
@@ -97,3 +97,4 @@
 | 18 ต.ค. 2569 | เพิ่ม Gemini เป็นทางเลือก Gate C ผ่าน provider abstraction | ลด vendor lock-in; Gemini รองรับ audio transcription และ structured output แต่ยังไม่ implement adapter | Codex |
 | 18 ต.ค. 2569 | เพิ่มการต่อบทสนทนาในรายการเดิมและจับคู่แปลงอัตโนมัติ | ลดรายการซ้ำและไม่ถามข้อมูลที่มีอยู่แล้วในทะเบียน | Codex |
 | 18 ต.ค. 2569 | เพิ่ม LINE Outbox, retry, dead-letter และ readiness | ป้องกันข้อความแจ้งเตือนหายเมื่อ LINE ล่มและให้ Admin กู้คิวได้ | Codex |
+| 18 ต.ค. 2569 | พัก multi-user/RBAC และเพิ่ม backup/restore กับ CI | จัดลำดับตามคำขอผู้ใช้ โดยเร่งความปลอดภัยข้อมูลและการตรวจ build ก่อน | Codex |

@@ -16,6 +16,7 @@ import { createId, createTraceToken } from "./lib/ids.js";
 import { evaluateIcsRisk } from "./domain/ics-rules.js";
 import type { Farmer, Plot } from "./domain/types.js";
 import { OutboxService } from "./services/outbox-service.js";
+import { BackupService } from "./services/backup-service.js";
 
 const loginSchema = z.object({ email: z.string().email(), password: z.string().min(8) });
 const reviewSchema = z.object({
@@ -40,6 +41,7 @@ const activityCorrectionSchema = z.object({
   activityType:z.string().trim().min(1).max(120), inputsUsed:z.string().trim().max(300).optional(),
   harvestAmount:z.coerce.number().nonnegative().optional(), harvestUnit:z.string().trim().max(30).optional(), reason:z.string().trim().min(5).max(500)
 });
+const restoreSchema = z.object({ confirm:z.literal("MERGE_BACKUP"), reason:z.string().trim().min(5).max(500), archive:z.unknown() });
 
 // Helmet publishes conditional ESM/CJS exports. Normalize the export explicitly
 // so TypeScript/Vercel and local Node builds agree on the callable middleware.
@@ -54,6 +56,7 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
   const reviewService = new ReviewService(repository);
   const lineService = new LineService(config, repository, createVoiceAnalyzer(config));
   const outboxService = new OutboxService(config, repository);
+  const backupService = new BackupService(repository);
   const publicDirectory = fileURLToPath(new URL("../public", import.meta.url));
 
   app.set("trust proxy", 1);
@@ -79,6 +82,7 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
     }
   });
 
+  app.use("/api/system/backup", express.json({ limit:"5mb" }));
   app.use(express.json({ limit: "256kb" }));
   app.use(rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -151,6 +155,26 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
       await repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"OUTBOX", entityId:message.messageId, actorId:request.user!.userId, action:"MANUAL_RETRY", before, after:message, occurredAt:new Date().toISOString() });
       response.json({ message });
     } catch (error) { next(error); }
+  });
+
+  app.get("/api/system/backup", auth.requireUser, auth.requireRole("ADMIN"), async (request, response, next) => {
+    try {
+      const archive = await backupService.export();
+      await repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"REPORT", entityId:`backup-${archive.generatedAt}`, actorId:request.user!.userId, action:"BACKUP_EXPORT", after:{ checksum:archive.checksum }, occurredAt:new Date().toISOString() });
+      response.setHeader("Content-Type", "application/json; charset=utf-8");
+      response.setHeader("Content-Disposition", `attachment; filename="ics-backup-${archive.generatedAt.slice(0,10)}.json"`);
+      response.json(archive);
+    } catch (error) { next(error); }
+  });
+
+  app.post("/api/system/backup/validate", auth.requireUser, auth.requireRole("ADMIN"), async (request, response, next) => {
+    try { const result=backupService.validate(request.body); response.json({ valid:true, schemaVersion:result.archive.schemaVersion, generatedAt:result.archive.generatedAt, checksum:result.archive.checksum, counts:result.counts }); }
+    catch (error) { next(error); }
+  });
+
+  app.post("/api/system/backup/restore", auth.requireUser, auth.requireRole("ADMIN"), async (request, response, next) => {
+    try { const input=restoreSchema.parse(request.body); response.json({ restored:await backupService.merge(input.archive, request.user!.userId, input.reason) }); }
+    catch (error) { next(error); }
   });
 
   app.get("/api/farmers", auth.requireUser, async (_request, response, next) => {

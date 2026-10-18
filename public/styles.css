@@ -158,6 +158,7 @@ input::placeholder { color: #52685b; }
 .outbox-list { display: grid; }
 .outbox-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px 22px; border-top: 1px solid var(--line-soft); }
 .outbox-row:first-child { border-top: 0; }.outbox-row small, .outbox-row p { display: block; color: #52685b; margin: 4px 0 0; }.outbox-row p { font-size: 13px; }
+.backup-form { display: grid; gap: 14px; padding: 20px 22px; max-width: 720px; }.backup-form label { display: grid; gap: 6px; font-weight: 600; }.backup-form textarea { min-height: 90px; resize: vertical; }.backup-form .button { justify-self: start; }
 .lot-list { display: grid; }
 .lot-card { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 18px 22px; border-bottom: 1px solid var(--line-soft); }
 .lot-card:last-child { border-bottom: 0; }

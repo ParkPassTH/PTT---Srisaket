@@ -19,6 +19,7 @@ export interface Repository {
   findActivityBySourceEvent(sourceEventId: string): Promise<Activity | undefined>;
   saveActivity(activity: Activity): Promise<void>;
   listReviews(activityId: string): Promise<Review[]>;
+  listAllReviews(): Promise<Review[]>;
   saveReview(review: Review): Promise<void>;
   listLots(): Promise<Lot[]>;
   getLot(lotId: string): Promise<Lot | undefined>;
@@ -34,6 +35,7 @@ export interface Repository {
   savePlot(plot: Plot): Promise<void>;
   saveAuditEvent(event: AuditEvent): Promise<void>;
   listAuditEvents(entityId: string): Promise<AuditEvent[]>;
+  listAllAuditEvents(): Promise<AuditEvent[]>;
   listOutbox(): Promise<OutboxMessage[]>;
   getOutboxMessage(messageId: string): Promise<OutboxMessage | undefined>;
   saveOutboxMessage(message: OutboxMessage): Promise<void>;

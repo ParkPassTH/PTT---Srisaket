@@ -36,6 +36,29 @@ describe("HTTP API", () => {
     assert.equal(response.body.status, "ok");
   });
 
+  it("publishes security headers and a dependency-aware readiness result", async () => {
+    const health = await request(app).get("/health");
+    assert.match(health.headers["content-security-policy"] ?? "", /default-src 'self'/);
+    assert.equal(health.headers["x-content-type-options"], "nosniff");
+    const ready = await request(app).get("/ready");
+    assert.equal(ready.status, 503);
+    assert.equal(ready.body.dependencies.dataStore, "ok");
+    assert.equal(ready.body.dependencies.line, "missing");
+  });
+
+  it("requires authentication for backup and validates a downloaded archive", async () => {
+    assert.equal((await request(app).get("/api/system/backup")).status,401);
+    const agent=request.agent(app);
+    await agent.post("/api/auth/login").send({ email:"admin@example.com", password:"secure-test-password" });
+    const backup=await agent.get("/api/system/backup");
+    assert.equal(backup.status,200);
+    assert.match(backup.headers["content-disposition"] ?? "", /ics-backup/);
+    const validation=await agent.post("/api/system/backup/validate").send(backup.body);
+    assert.equal(validation.status,200);
+    assert.equal(validation.body.valid,true);
+    assert.equal(validation.body.counts.activities,1);
+  });
+
   it("serves the dashboard application shell", async () => {
     const response = await request(app).get("/");
     assert.equal(response.status, 200);

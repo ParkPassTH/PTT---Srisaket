@@ -1,4 +1,4 @@
-const state = { user: null, dashboard: null, activities: [], farmers: [], plots: [], lots: [], selectedActivity: null, drawerInvoker: null, currentView: "overview", formMode: null };
+const state = { user: null, dashboard: null, activities: [], farmers: [], plots: [], lots: [], selectedActivity: null, drawerInvoker: null, currentView: "overview", formMode: null, backupArchive: null };
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -385,6 +385,25 @@ $("#entity-form").addEventListener("submit", async (event) => {
 });
 $("#activity-search").addEventListener("input", () => { clearTimeout(filterActivities.timer); filterActivities.timer = setTimeout(filterActivities, 250); });
 $("#risk-filter").addEventListener("change", filterActivities);
+$("#backup-file").addEventListener("change", async (event) => {
+  state.backupArchive=null; $("#restore-backup").disabled=true;
+  const file=event.target.files?.[0]; if (!file) return;
+  try {
+    if (file.size > 5*1024*1024) throw new Error("ไฟล์ใหญ่เกิน 5 MB");
+    const archive=JSON.parse(await file.text());
+    const result=await api("/api/system/backup/validate", { method:"POST", body:JSON.stringify(archive) });
+    state.backupArchive=archive;
+    $("#backup-validation").textContent=`ไฟล์ถูกต้อง · วันที่ ${formatDateTime(result.generatedAt)} · เกษตรกร ${result.counts.farmers} · กิจกรรม ${result.counts.activities} · ล็อต ${result.counts.lots}`;
+    $("#restore-backup").disabled=false;
+  } catch(error) { $("#backup-validation").textContent=`ใช้ไฟล์นี้ไม่ได้: ${error.message}`; }
+});
+$("#restore-backup").addEventListener("click", async (event) => {
+  const reason=$("#backup-reason").value.trim();
+  if (!state.backupArchive || reason.length<5) { showToast("กรุณาเลือกไฟล์ที่ผ่านการตรวจและระบุเหตุผลอย่างน้อย 5 ตัวอักษร"); return; }
+  event.currentTarget.disabled=true;
+  try { const result=await api("/api/system/backup/restore", { method:"POST", body:JSON.stringify({ confirm:"MERGE_BACKUP", reason, archive:state.backupArchive }) }); showToast(`กู้คืนแบบรวมข้อมูลสำเร็จ ${result.restored.counts.activities} กิจกรรม`); state.backupArchive=null; $("#backup-file").value=""; $("#backup-reason").value=""; $("#backup-validation").textContent="กู้คืนเสร็จและบันทึก Audit แล้ว"; }
+  catch(error) { showToast(error.message); event.currentTarget.disabled=false; }
+});
 $("#review-drawer").addEventListener("submit", async (event) => {
   event.preventDefault();
   if (event.target.id === "correction-form") {

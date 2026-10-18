@@ -190,6 +190,7 @@
       <div id="reports-content" class="page-content" hidden>
         <section class="page-intro"><div><p class="eyebrow">หลักฐานและการส่งต่อ</p><h2>รายงาน</h2><p>สรุปจากข้อมูลจริงในระบบตามสิทธิ์ผู้ใช้งาน</p></div><a class="button button-primary download-link" href="/api/reports/activities.csv">ดาวน์โหลดกิจกรรม CSV</a></section>
         <section id="report-grid" class="metrics" aria-label="สรุปรายงาน"></section>
+        <section class="registry-panel backup-panel"><header class="panel-head"><div><h2>สำรองและกู้คืนข้อมูล</h2><p>ไฟล์มี checksum สำหรับตรวจความเสียหาย และการกู้คืนจะรวมข้อมูลโดยไม่ลบรายการปัจจุบัน</p></div><a class="button button-primary download-link" href="/api/system/backup">ดาวน์โหลด Backup</a></header><div class="backup-form"><label>เลือกไฟล์ Backup JSON<input id="backup-file" type="file" accept="application/json,.json"></label><p id="backup-validation" class="muted" role="status">ระบบจะตรวจโครงสร้างและ checksum ก่อนเปิดให้กู้คืน</p><label>เหตุผลในการกู้คืน<textarea id="backup-reason" minlength="5" maxlength="500" placeholder="เช่น กู้ข้อมูลหลังตรวจพบแถวสูญหาย"></textarea></label><button id="restore-backup" class="button secondary-button" type="button" disabled>รวมข้อมูลจาก Backup</button></div></section>
         <section class="guide-panel"><h3>ข้อมูลในรายงาน</h3><p>ไฟล์ CSV ประกอบด้วยรหัสกิจกรรม เวลา เกษตรกร แปลง พืช ประเภทกิจกรรม ความเสี่ยง และสถานะประมวลผล เปิดด้วย Google Sheets หรือ Excel ได้</p></section>
       </div>
     </main>

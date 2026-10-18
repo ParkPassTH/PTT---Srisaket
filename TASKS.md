@@ -34,8 +34,8 @@
 - [x] T-105 สร้าง Google Sheets adapter — F-023
 - [x] T-105A จัดทำคู่มือต่อ Sheets/LINE/OpenAI และ acceptance tests — F-023, F-029, F-030
 - [x] T-106 สร้าง error model และ structured logging — F-025, F-026
-- [-] T-107 สร้าง authentication/session และ RBAC — local session พร้อม รอ durable user store
-- [-] T-108 ตั้งค่า unit/integration test และ CI — local suite พร้อม รอ hosted CI
+- [~] T-107 สร้าง authentication/session และ RBAC — พักตามคำขอผู้ใช้; ใช้บัญชีผู้ดูแลเดิมชั่วคราว
+- [x] T-108 ตั้งค่า unit/integration test และ CI — local suite และ GitHub Actions พร้อม
 
 ## Phase 2 — LINE และ Voice Pipeline
 
@@ -80,9 +80,9 @@
 ## Phase 5 — Operations และ Deployment
 
 - [-] T-501 health/readiness endpoints — `/health` และ `/ready` ตรวจ data store/config พร้อม; รอ active probe LINE/AI
-- [ ] T-502 backup/export/restore drill — F-031
+- [x] T-502 backup/export/restore drill — JSON checksum, validate-first, merge-only restore และ audit พร้อม — F-031
 - [x] T-503 free-tier hosting selection and config — Render Blueprint พร้อม พร้อมระบุข้อจำกัด
-- [ ] T-504 CI deployment pipeline — F-029, F-030
+- [x] T-504 CI verification pipeline — GitHub Actions รัน `npm ci` และ `npm run check` ทุก push/PR — F-029
 - [ ] T-505 LINE production webhook setup guide — F-030
 - [ ] T-506 monitoring, quota and cost alerts — F-025
 - [ ] T-507 rollback and incident runbook — F-030
@@ -92,7 +92,7 @@
 - [x] T-601 unit tests for rules/domain
 - [-] T-602 integration tests for LINE/Gemini/Sheets adapters — LINE pipeline ผ่าน mock integration; รอ credential smoke test จริง
 - [-] T-603 end-to-end critical paths — login/dashboard/review visual flow ผ่าน
-- [ ] T-604 security review
+- [-] T-604 security review — headers/auth/backup limits และ dependency audit ผ่าน; รอ penetration review ภายนอก
 - [ ] T-605 accessibility audit
 - [x] T-606 desktop/mobile visual QA
 - [-] T-607 operator manual — integration/testing guide พร้อม; กำลังเพิ่ม dashboard operations
