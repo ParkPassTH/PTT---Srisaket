@@ -30,10 +30,13 @@ This document makes the MVP inspectable and portable. Google Sheets is the curre
 | `StorageLocations` | `location_id` | referenced by lots | Reusable warehouse/storage registry |
 | `AuditEvents` | `audit_id` | polymorphic entity ID | Append-only before/after history |
 | `Outbox` | `message_id` | optional related entity | Durable LINE delivery |
+| `ImportBatches` | `batch_id` | owns staged import rows | Controlled import preview/commit lifecycle |
+| `ImportRows` | `import_row_id` | `batch_id → ImportBatches` | Row-level source, normalization and issues |
+| `StockMovements` | `movement_id` | `lot_id → Lots`; `(lot_id, reference)` idempotency | Append-only inventory ledger |
 
 Canonical column names are defined by `TABLES` in `src/repositories/google-sheets-repository.ts`; the adapter appends missing headers without moving or deleting existing columns.
 
-## 4. Target entities for legacy import
+## 4. Legacy import entities
 
 ### ImportBatch
 
@@ -70,7 +73,7 @@ Unique constraint: `(checksum, entity_type)` for non-VOID batches. Re-uploading 
 
 Import rows are staging records. Preview never writes Farmers, Plots, Activities, or Lots.
 
-## 5. Target inventory entities
+## 5. Inventory entities
 
 ### StockMovement
 
@@ -85,6 +88,8 @@ available = on_hand - reserved, only when lot eligibility is true
 ```
 
 Transactions must reject negative balances and unit mismatches.
+
+Implementation note: Google Sheets enforces `(lot_id, reference)` through the service/repository path. A PostgreSQL/Supabase migration must add a database-level `UNIQUE (lot_id, reference)` constraint for atomic enforcement.
 
 ### LotStandardHistory
 

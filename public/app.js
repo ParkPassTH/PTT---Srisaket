@@ -1,4 +1,4 @@
-const state = { user: null, dashboard: null, activities: [], farmers: [], plots: [], lots: [], storageLocations: [], selectedActivity: null, drawerInvoker: null, currentView: "overview", formMode: null, backupArchive: null };
+const state = { user: null, dashboard: null, activities: [], farmers: [], plots: [], lots: [], storageLocations: [], selectedActivity: null, drawerInvoker: null, currentView: "overview", formMode: null, backupArchive: null, importFile: null, importParsed: null, importPreview: null };
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -126,7 +126,7 @@ function renderDashboard() {
 }
 
 async function showView(view) {
-  const supported = ["overview", "reviews", "activities", "lots", "farmers", "reports", "integrations"];
+  const supported = ["overview", "reviews", "activities", "lots", "farmers", "imports", "reports", "integrations"];
   if (!supported.includes(view)) {
     showToast(view === "lots" ? "ล็อตและคลังอยู่ในเฟสถัดไป" : "รายงานและไฟล์ส่งออกอยู่ในเฟสถัดไป");
     return;
@@ -138,8 +138,9 @@ async function showView(view) {
   $("#integrations-content").hidden = view !== "integrations";
   $("#lots-content").hidden = view !== "lots";
   $("#reports-content").hidden = view !== "reports";
+  $("#imports-content").hidden = view !== "imports";
   $("#sidebar").classList.remove("open");
-  const titles = { overview:"งานที่ต้องดูแลวันนี้", reviews:"งานที่รอตรวจสอบ", activities:"ทะเบียนกิจกรรมแปลง", lots:"ล็อตและคลัง", farmers:"ทะเบียนเกษตรกรและแปลง", reports:"รายงาน", integrations:"สถานะการเชื่อมต่อ" };
+  const titles = { overview:"งานที่ต้องดูแลวันนี้", reviews:"งานที่รอตรวจสอบ", activities:"ทะเบียนกิจกรรมแปลง", lots:"ล็อตและคลัง", farmers:"ทะเบียนเกษตรกรและแปลง", imports:"นำเข้าข้อมูลเดิม", reports:"รายงาน", integrations:"สถานะการเชื่อมต่อ" };
   $("#page-title").textContent = titles[view];
   if (view === "farmers") await loadFarmers();
   if (view === "integrations") await loadIntegrations();
@@ -173,6 +174,114 @@ function renderReports() {
   const { summary } = state.dashboard;
   const farmers = new Set(state.activities.map((x) => x.farmerId)).size;
   $("#report-grid").innerHTML = `<article class="metric"><span>กิจกรรมทั้งหมด</span><strong>${state.activities.length}</strong><small>รายการที่โหลดในทะเบียน</small></article><article class="metric"><span>เกษตรกรที่มีรายการ</span><strong>${farmers}</strong><small>นับจากกิจกรรม</small></article><article class="metric"><span>รอตรวจสอบ</span><strong>${summary.pendingReview}</strong><small>ต้องดำเนินการ</small></article><article class="metric"><span>ล็อตในคลัง</span><strong>${summary.lotsInStock}</strong><small>พร้อมส่งต่อ</small></article>`;
+}
+
+const importStatusMeta = {
+  VALID: ["พร้อมนำเข้า", "status-clear"],
+  ERROR: ["ต้องแก้ไข", "status-critical"],
+  DUPLICATE: ["ข้อมูลซ้ำ", "status-review"],
+  SKIPPED: ["ข้ามรายการ", "status-info"],
+  COMMITTED: ["นำเข้าแล้ว", "status-approved"]
+};
+
+function importStatusBadge(status) {
+  const [label, className] = importStatusMeta[status] || [status || "ไม่ทราบสถานะ", "status-info"];
+  return `<span class="status ${className}">${escapeHtml(label)}</span>`;
+}
+
+function fileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+    reader.onerror = () => reject(new Error("เบราว์เซอร์อ่านไฟล์ไม่สำเร็จ กรุณาเลือกไฟล์ใหม่"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function resetImport() {
+  state.importFile = null;
+  state.importParsed = null;
+  state.importPreview = null;
+  $("#import-file").value = "";
+  $("#import-file-status").textContent = "ยังไม่ได้เลือกไฟล์";
+  $("#import-mapping-panel").hidden = true;
+  $("#import-preview-panel").hidden = true;
+  $("#import-mapping-error").hidden = true;
+  $("#import-operation-error").hidden = true;
+}
+
+function bestHeader(headers, candidates) {
+  return headers.find((header) => candidates.includes(String(header).trim().toLocaleLowerCase("en-US"))) || "";
+}
+
+function setMappingOptions(headers) {
+  const options = `<option value="">เลือกคอลัมน์...</option>${headers.map((header) => `<option value="${escapeHtml(header)}">${escapeHtml(header)}</option>`).join("")}`;
+  $("#map-member-code").innerHTML = options;
+  $("#map-display-name").innerHTML = options;
+  $("#map-member-code").value = bestHeader(headers, ["member_code", "membercode", "farmer_id", "รหัสสมาชิก", "รหัสเกษตรกร"]);
+  $("#map-display-name").value = bestHeader(headers, ["display_name", "displayname", "full_name", "name", "ชื่อเกษตรกร", "ชื่อ-นามสกุล", "ชื่อ"]);
+}
+
+async function parseImportFile(file) {
+  const allowed = /\.(csv|xlsx)$/i;
+  if (!allowed.test(file.name)) throw new Error("รองรับเฉพาะไฟล์ .csv และ .xlsx เท่านั้น");
+  if (file.size > 2 * 1024 * 1024) throw new Error("ไฟล์ใหญ่เกิน 2 MB กรุณาแบ่งไฟล์แล้วลองใหม่");
+  if (!file.size) throw new Error("ไฟล์ว่าง กรุณาเลือกไฟล์ที่มีหัวคอลัมน์และข้อมูลอย่างน้อย 1 แถว");
+  state.importFile = file;
+  const status = $("#import-file-status");
+  status.innerHTML = `<span class="spinner" aria-hidden="true"></span> กำลังอ่าน ${escapeHtml(file.name)}...`;
+  const parsed = await api("/api/imports/parse", { method:"POST", body:JSON.stringify({ sourceName:file.name, contentBase64:await fileAsBase64(file) }) });
+  if (!Array.isArray(parsed.headers) || !parsed.headers.length || !Array.isArray(parsed.rows)) throw new Error("ระบบอ่านโครงสร้างไฟล์ไม่ได้ กรุณาตรวจว่ามีหัวคอลัมน์ในแถวแรก");
+  state.importParsed = parsed;
+  setMappingOptions(parsed.headers);
+  $("#import-source-summary").textContent = `${parsed.sourceType || file.name.split(".").pop().toUpperCase()} · ${parsed.rows.length} แถว`;
+  status.innerHTML = `<strong>${escapeHtml(file.name)}</strong><span>${new Intl.NumberFormat("th-TH").format(parsed.rows.length)} แถว · ${new Intl.NumberFormat("th-TH").format(parsed.headers.length)} คอลัมน์</span>`;
+  $("#import-mapping-panel").hidden = false;
+  $("#import-preview-panel").hidden = true;
+  $("#import-mapping-title").focus?.();
+}
+
+function renderImportPreview() {
+  const { batch, rows, reused } = state.importPreview;
+  const skipped = rows.filter((row) => row.rowStatus === "SKIPPED").length;
+  $("#import-summary").innerHTML = [
+    [batch.totalRows, "ทั้งหมด", "ทุกแถวที่ตรวจ"],
+    [batch.validRows, "พร้อมนำเข้า", "ข้อมูลบังคับครบ"],
+    [batch.errorRows, "ต้องแก้ไข", "ดูเหตุผลรายแถว"],
+    [batch.duplicateRows, "ข้อมูลซ้ำ", "จะไม่สร้างสมาชิกซ้ำ"],
+    [skipped, "ข้าม", "ไม่ถูกนำเข้า"]
+  ].map(([value,label,detail]) => `<article><strong>${new Intl.NumberFormat("th-TH").format(value)}</strong><span>${label}</span><small>${detail}</small></article>`).join("");
+  $("#import-preview-note").textContent = reused ? "ไฟล์นี้เคยตรวจแล้ว ระบบแสดงผลชุดเดิมโดยไม่สร้างรายการซ้ำ" : "ผลตรวจถูกพักไว้เป็นชุดนำเข้า ยังไม่มีข้อมูลถูกบันทึกเข้าทะเบียน";
+  $("#import-error-report").href = `/api/imports/${encodeURIComponent(batch.batchId)}/errors.csv`;
+  $("#import-error-report").hidden = batch.errorRows + batch.duplicateRows === 0;
+  $("#commit-import").disabled = batch.status !== "READY" || batch.validRows === 0;
+  $("#commit-import").title = batch.status === "READY" ? "" : "ต้องแก้ข้อมูลผิดพลาดและข้อมูลซ้ำในไฟล์ก่อน";
+  $("#import-reason").disabled = batch.status !== "READY";
+  $("#import-result-filter").value = "";
+  renderImportRows();
+  $("#import-preview-panel").hidden = false;
+  $("#import-preview-panel").scrollIntoView({ behavior:"smooth", block:"start" });
+}
+
+function renderImportRows() {
+  const rows = state.importPreview?.rows || [];
+  const filter = $("#import-result-filter").value;
+  const visible = filter ? rows.filter((row) => row.rowStatus === filter) : rows;
+  $("#import-result-count").textContent = `แสดง ${new Intl.NumberFormat("th-TH").format(visible.length)} จาก ${new Intl.NumberFormat("th-TH").format(rows.length)} แถว`;
+  $("#import-result-rows").innerHTML = visible.map((row) => {
+    const data = row.normalizedData || {};
+    const issues = Array.isArray(row.issues) ? row.issues : [];
+    return `<tr><td data-label="แถว"><strong>${new Intl.NumberFormat("th-TH").format(row.sourceRowNumber)}</strong></td><td data-label="รหัสสมาชิก">${escapeHtml(data.memberCode || "—")}</td><td data-label="ชื่อเกษตรกร">${escapeHtml(data.displayName || "—")}</td><td data-label="ผลตรวจ">${importStatusBadge(row.rowStatus)}</td><td data-label="รายละเอียด / วิธีแก้" class="import-issue">${issues.length ? issues.map((issue) => `<span>${escapeHtml(issue.message)}</span>`).join("") : "ข้อมูลบังคับครบ พร้อมนำเข้า"}</td></tr>`;
+  }).join("");
+  $("#import-results-empty").hidden = visible.length > 0;
+  $(".import-table-wrap").hidden = visible.length === 0;
+}
+
+function showImportOperationError(message) {
+  const box = $("#import-operation-error");
+  $("p", box).textContent = message;
+  box.hidden = false;
+  box.focus?.();
 }
 
 async function loadFarmers() {
@@ -394,6 +503,56 @@ $("#entity-form").addEventListener("submit", async (event) => {
 });
 $("#activity-search").addEventListener("input", () => { clearTimeout(filterActivities.timer); filterActivities.timer = setTimeout(filterActivities, 250); });
 $("#risk-filter").addEventListener("change", filterActivities);
+$("#import-file").addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try { await parseImportFile(file); }
+  catch (error) { resetImport(); $("#import-file-status").innerHTML = `<span class="status status-critical">อ่านไฟล์ไม่ได้</span><span>${escapeHtml(error.message)}</span>`; }
+});
+const importDropzone = $("#import-dropzone");
+["dragenter", "dragover"].forEach((type) => importDropzone.addEventListener(type, (event) => { event.preventDefault(); importDropzone.classList.add("dragging"); }));
+["dragleave", "drop"].forEach((type) => importDropzone.addEventListener(type, (event) => { event.preventDefault(); importDropzone.classList.remove("dragging"); }));
+importDropzone.addEventListener("drop", async (event) => {
+  const file = event.dataTransfer?.files?.[0];
+  if (!file) return;
+  try { await parseImportFile(file); }
+  catch (error) { resetImport(); $("#import-file-status").innerHTML = `<span class="status status-critical">อ่านไฟล์ไม่ได้</span><span>${escapeHtml(error.message)}</span>`; }
+});
+$("#reset-import").addEventListener("click", () => { resetImport(); $("#import-file").focus(); });
+$("#import-mapping-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const errorElement = $("#import-mapping-error");
+  const button = $("#preview-import");
+  const memberCode = $("#map-member-code").value;
+  const displayName = $("#map-display-name").value;
+  errorElement.hidden = true;
+  if (!state.importParsed || !state.importFile) return;
+  if (memberCode === displayName) { errorElement.textContent = "รหัสสมาชิกและชื่อเกษตรกรต้องเลือกคนละคอลัมน์"; errorElement.hidden = false; return; }
+  button.disabled = true;
+  button.textContent = "กำลังตรวจข้อมูล...";
+  try {
+    state.importPreview = await api("/api/imports/preview", { method:"POST", body:JSON.stringify({ sourceName:state.importFile.name, sourceType:state.importParsed.sourceType, rows:state.importParsed.rows, mapping:{ memberCode, displayName } }) });
+    renderImportPreview();
+  } catch (error) { errorElement.textContent = error.message; errorElement.hidden = false; }
+  finally { button.disabled = false; button.textContent = "ตรวจข้อมูลก่อนนำเข้า"; }
+});
+$("#import-result-filter").addEventListener("change", renderImportRows);
+$("#commit-import").addEventListener("click", async (event) => {
+  const reason = $("#import-reason").value.trim();
+  if (reason.length < 5) { showImportOperationError("กรุณาระบุเหตุผลการนำเข้าอย่างน้อย 5 ตัวอักษร"); $("#import-reason").focus(); return; }
+  const batch = state.importPreview?.batch;
+  if (!batch) return;
+  event.currentTarget.disabled = true;
+  $("#import-operation-error").hidden = true;
+  try {
+    const result = await api(`/api/imports/${encodeURIComponent(batch.batchId)}/commit`, { method:"POST", body:JSON.stringify({ reason }) });
+    state.importPreview.batch = result.batch || { ...batch, status:"COMMITTED" };
+    showToast(`นำเข้าสมาชิกสำเร็จ ${result.committedRows ?? batch.validRows} รายการ`);
+    $("#commit-import").textContent = "นำเข้าเรียบร้อยแล้ว";
+    $("#import-reason").disabled = true;
+  } catch (error) { showImportOperationError(error.message); event.currentTarget.disabled = false; }
+});
+$("#retry-import-operation").addEventListener("click", () => { $("#import-operation-error").hidden = true; $("#commit-import").click(); });
 $("#backup-file").addEventListener("change", async (event) => {
   state.backupArchive=null; $("#restore-backup").disabled=true;
   const file=event.target.files?.[0]; if (!file) return;

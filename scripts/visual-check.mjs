@@ -64,6 +64,9 @@ try {
   await desktop.locator('[data-view="reports"]').click();
   await desktop.locator("#reports-content").waitFor({ state:"visible" });
   await capture(desktop, "reports-desktop");
+  await desktop.locator('[data-view="imports"]').click();
+  await desktop.locator("#imports-content").waitFor({ state:"visible" });
+  await capture(desktop, "imports-desktop");
 
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
   await mobile.goto(baseUrl, { waitUntil: "networkidle" });
@@ -88,9 +91,14 @@ try {
   await mobile.locator('[data-view="farmers"]').click();
   await mobile.locator("#farmers-content").waitFor({ state:"visible" });
   await capture(mobile, "farmers-mobile");
+  await mobile.locator("#menu-button").click();
+  await mobile.locator('[data-view="imports"]').click();
+  await mobile.locator("#imports-content").waitFor({ state:"visible" });
+  await mobile.waitForTimeout(300);
+  await capture(mobile, "imports-mobile");
 
   await browser.close();
-  console.log(JSON.stringify({ ok: true, captures: ["login-desktop.png", "desktop.png", "farmers-desktop.png", "integrations-desktop.png", "lots-desktop.png", "reports-desktop.png", "login-mobile.png", "mobile.png", "farmers-mobile.png"] }));
+  console.log(JSON.stringify({ ok: true, captures: ["login-desktop.png", "desktop.png", "farmers-desktop.png", "integrations-desktop.png", "lots-desktop.png", "reports-desktop.png", "imports-desktop.png", "login-mobile.png", "mobile.png", "farmers-mobile.png", "imports-mobile.png"] }));
 } finally {
   server.kill();
 }

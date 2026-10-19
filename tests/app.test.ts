@@ -203,6 +203,23 @@ describe("HTTP API", () => {
     assert.equal(response.body.lot.farmerId, undefined);
   });
 
+  it("records stock movements through an idempotent API and returns the derived balance",async()=>{
+    const agent=request.agent(app);
+    await agent.post("/api/auth/login").send({email:"admin@example.com",password:"secure-test-password"});
+    const received=await agent.post("/api/lots/LOT-TEST-001/stock-movements").send({type:"RECEIVE",quantity:1,unit:"กก.",reason:"รับเข้าจากการเก็บเกี่ยว",reference:"manual-receive:LOT-TEST-001"});
+    assert.equal(received.status,201);
+    assert.equal(received.body.balance.available,1);
+    const replay=await agent.post("/api/lots/LOT-TEST-001/stock-movements").send({type:"RECEIVE",quantity:1,unit:"กก.",reason:"รับเข้าจากการเก็บเกี่ยว",reference:"manual-receive:LOT-TEST-001"});
+    assert.equal(replay.status,200);
+    assert.equal(replay.body.created,false);
+    const reserve=await agent.post("/api/lots/LOT-TEST-001/stock-movements").send({type:"RESERVE",quantity:0.4,unit:"กก.",reason:"จองให้คำสั่งซื้อ",reference:"order:API-1:reserve"});
+    assert.equal(reserve.status,201);
+    const stock=await agent.get("/api/lots/LOT-TEST-001/stock");
+    assert.equal(stock.status,200);
+    assert.deepEqual({onHand:stock.body.balance.onHand,reserved:stock.body.balance.reserved,available:stock.body.balance.available},{onHand:1,reserved:0.4,available:0.6});
+    assert.equal(stock.body.movements.length,2);
+  });
+
   it("rejects unsigned LINE webhook calls", async () => {
     const response = await request(app)
       .post("/webhooks/line")

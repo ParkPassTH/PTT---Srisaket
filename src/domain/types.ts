@@ -143,6 +143,33 @@ export interface StorageLocation {
   updatedAt: string;
 }
 
+export type StockMovementType = "RECEIVE" | "RESERVE" | "RELEASE" | "SHIP" | "ADJUST" | "RECALL";
+
+/** Append-only inventory fact. Existing movements must never be overwritten. */
+export interface StockMovement {
+  movementId: string;
+  lotId: string;
+  movementType: StockMovementType;
+  /** Positive for every type except ADJUST, which may be positive or negative. */
+  quantity: number;
+  unit: string;
+  actorId: string;
+  reason: string;
+  /** Caller-owned idempotency key, scoped to the lot. */
+  reference: string;
+  occurredAt: string;
+}
+
+export interface StockBalance {
+  lotId: string;
+  unit: string;
+  onHand: number;
+  reserved: number;
+  available: number;
+  recalled: boolean;
+  updatedAt?: string;
+}
+
 export interface ImportIssue { field?: string; code: string; message: string; }
 export interface ImportBatch {
   batchId:string; sourceName:string; sourceType:"CSV"|"XLSX"|"OCR"|"API"; entityType:"FARMER";
@@ -156,7 +183,7 @@ export interface ImportRow {
 
 export interface AuditEvent {
   auditId: string;
-  entityType: "ACTIVITY" | "LOT" | "FARMER" | "PLOT" | "STORAGE_LOCATION" | "IMPORT_BATCH" | "REPORT" | "USER" | "RULE" | "OUTBOX";
+  entityType: "ACTIVITY" | "LOT" | "STOCK_MOVEMENT" | "FARMER" | "PLOT" | "STORAGE_LOCATION" | "IMPORT_BATCH" | "REPORT" | "USER" | "RULE" | "OUTBOX";
   entityId: string;
   actorId: string;
   action: string;

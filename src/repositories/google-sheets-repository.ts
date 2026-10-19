@@ -1,6 +1,6 @@
 import { google, sheets_v4 } from "googleapis";
 import type { AppConfig } from "../config.js";
-import type { Activity, AuditEvent, Farmer, ImportBatch, ImportRow, Lot, OutboxMessage, Plot, Review, StorageLocation } from "../domain/types.js";
+import type { Activity, AuditEvent, Farmer, ImportBatch, ImportRow, Lot, OutboxMessage, Plot, Review, StockMovement, StorageLocation } from "../domain/types.js";
 import type { ActivityFilters, Repository } from "./repository.js";
 
 const TABLES = {
@@ -9,6 +9,7 @@ const TABLES = {
   Activities: ["activity_id", "source_event_id", "source_event_ids", "farmer_id", "farmer_name", "plot_id", "plot_name", "crop", "occurred_at", "received_at", "transcript", "audio_content_id", "activity_type", "inputs_used", "harvest_amount", "harvest_unit", "processing_status", "risk_status", "confidence", "flag_reasons", "matched_terms", "created_lot_id", "revision", "correction_requested_at", "updated_at"],
   Reviews: ["review_id", "activity_id", "reviewer_id", "decision", "reason", "reviewed_at"],
   Lots: ["lot_id", "activity_id", "farmer_id", "farmer_name", "plot_name", "crop", "quantity", "unit", "harvest_date", "inventory_status", "trace_token", "storage_location_id", "storage_location_name", "created_at", "updated_at"],
+  StockMovements: ["movement_id", "lot_id", "movement_type", "quantity", "unit", "actor_id", "reason", "reference", "occurred_at"],
   StorageLocations: ["location_id", "name", "location_type", "address", "zone", "status", "created_at", "updated_at"],
   ImportBatches: ["batch_id","source_name","source_type","entity_type","checksum","status","total_rows","valid_rows","error_rows","duplicate_rows","created_by","created_at","updated_at"],
   ImportRows: ["import_row_id","batch_id","source_row_number","raw_data","normalized_data","row_status","issues","target_entity_id","created_at","updated_at"],
@@ -111,6 +112,12 @@ export class GoogleSheetsRepository implements Repository {
   async getLot(id: string) { return (await this.listLots()).find((x) => x.lotId === id); }
   async getLotByTraceToken(token: string) { return (await this.listLots()).find((x) => x.traceToken === token); }
   async saveLot(x: Lot) { await this.upsert("Lots", "lot_id", x.lotId, mapKeys(x)); }
+  async listStockMovements(lotId?: string) { return (await this.rows("StockMovements")).map(stockMovementFromRow).filter((x) => !lotId || x.lotId===lotId).sort((a,b) => a.occurredAt.localeCompare(b.occurredAt) || a.movementId.localeCompare(b.movementId)); }
+  async getStockMovementByReference(lotId:string,reference:string){ return (await this.listStockMovements(lotId)).find((x)=>x.reference===reference); }
+  async appendStockMovement(x:StockMovement) {
+    if (await this.getStockMovementByReference(x.lotId,x.reference)) throw new Error(`Duplicate stock reference: ${x.reference}`);
+    await this.append("StockMovements",mapKeys(x));
+  }
   async listStorageLocations() { return (await this.rows("StorageLocations")).map(storageLocationFromRow).sort((a,b) => a.name.localeCompare(b.name,"th")); }
   async getStorageLocation(id: string) { return (await this.listStorageLocations()).find((x) => x.locationId === id); }
   async saveStorageLocation(x: StorageLocation) { await this.upsert("StorageLocations", "location_id", x.locationId, mapKeys(x)); }
@@ -149,6 +156,7 @@ function activityFromRow(r: Row): Activity { return { activityId:r.activity_id!,
 function activityToRow(x: Activity) { return mapKeys(x); }
 function reviewFromRow(r: Row): Review { return { reviewId:r.review_id!,activityId:r.activity_id!,reviewerId:r.reviewer_id!,decision:r.decision as Review["decision"],reason:r.reason!,reviewedAt:r.reviewed_at! }; }
 function lotFromRow(r: Row): Lot { return { lotId:r.lot_id!,activityId:r.activity_id!,farmerId:r.farmer_id!,farmerName:r.farmer_name!,plotName:r.plot_name!,crop:r.crop!,quantity:Number(r.quantity),unit:r.unit!,harvestDate:r.harvest_date!,inventoryStatus:r.inventory_status as Lot["inventoryStatus"],traceToken:r.trace_token!,...(r.storage_location_id?{storageLocationId:r.storage_location_id}:{}),...(r.storage_location_name?{storageLocationName:r.storage_location_name}:{}),createdAt:r.created_at!,updatedAt:r.updated_at! }; }
+function stockMovementFromRow(r:Row):StockMovement{return{movementId:r.movement_id!,lotId:r.lot_id!,movementType:r.movement_type as StockMovement["movementType"],quantity:Number(r.quantity),unit:r.unit!,actorId:r.actor_id!,reason:r.reason!,reference:r.reference!,occurredAt:r.occurred_at!};}
 function storageLocationFromRow(r: Row): StorageLocation { return { locationId:r.location_id!,name:r.name!,...(r.location_type?{locationType:r.location_type}:{}),...(r.address?{address:r.address}:{}),...(r.zone?{zone:r.zone}:{}),status:r.status === "INACTIVE" ? "INACTIVE" : "ACTIVE",createdAt:r.created_at!,updatedAt:r.updated_at! }; }
 function importBatchFromRow(r:Row):ImportBatch{return{batchId:r.batch_id!,sourceName:r.source_name!,sourceType:r.source_type as ImportBatch["sourceType"],entityType:r.entity_type as ImportBatch["entityType"],checksum:r.checksum!,status:r.status as ImportBatch["status"],totalRows:Number(r.total_rows),validRows:Number(r.valid_rows),errorRows:Number(r.error_rows),duplicateRows:Number(r.duplicate_rows),createdBy:r.created_by!,createdAt:r.created_at!,updatedAt:r.updated_at!};}
 function importRowFromRow(r:Row):ImportRow{return{importRowId:r.import_row_id!,batchId:r.batch_id!,sourceRowNumber:Number(r.source_row_number),rawData:json(r.raw_data!,{}),normalizedData:json(r.normalized_data!,{}),rowStatus:r.row_status as ImportRow["rowStatus"],issues:json(r.issues!,[]),...(r.target_entity_id?{targetEntityId:r.target_entity_id}:{}),createdAt:r.created_at!,updatedAt:r.updated_at!};}

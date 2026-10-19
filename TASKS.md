@@ -75,12 +75,12 @@
 ## Phase 3A — Legacy Data Migration และ Data Quality
 
 - [x] T-351 ออกแบบ import batch/domain และ staging repository แยกจากข้อมูลใช้งานจริง — F-036, F-038
-- [ ] T-352 รองรับ CSV/XLSX upload แบบจำกัดขนาด ชนิดไฟล์ และสแกนสูตร/ข้อมูลอันตราย — F-036
-- [ ] T-353 ทำ column mapping พร้อมบันทึก template ต่อแหล่งข้อมูล — F-036
-- [-] T-354 ทำ Import Preview แสดง valid/error/duplicate/skipped ก่อน commit — API staging สำหรับ FARMER พร้อม; รอ file parser/UI — F-036, F-037
-- [ ] T-355 ตรวจ required fields, stable ID, duplicate, วันที่, หน่วย และ farmer–plot–lot relationship — F-037
-- [ ] T-356 ทำ error report ดาวน์โหลดได้ พร้อมเลขแถว สาเหตุ และวิธีแก้ — F-037
-- [ ] T-357 ทำ dry run, batch checksum, idempotent commit และ rollback/void batch — F-038
+- [x] T-352 รองรับ CSV/XLSX upload ไม่เกิน 2 MiB/500 แถว/50 คอลัมน์ พร้อมป้องกันชนิดไฟล์และ formula injection ในรายงาน — F-036
+- [-] T-353 ทำ column mapping และเดาหัวคอลัมน์ผ่าน UI แล้ว; รอบันทึก template ต่อแหล่งข้อมูล — F-036
+- [x] T-354 ทำ Import Preview สำหรับ FARMER แสดง valid/error/duplicate/skipped ก่อน commit พร้อม UI — F-036, F-037
+- [-] T-355 ตรวจ required fields, stable ID และ duplicate สำหรับ FARMER แล้ว; รอวันที่ หน่วย และ farmer–plot–lot สำหรับชนิดข้อมูลถัดไป — F-037
+- [x] T-356 ทำ error report ดาวน์โหลดได้ พร้อมเลขแถว สาเหตุ และวิธีแก้ — F-037
+- [-] T-357 ทำ dry run, batch checksum, READY-only idempotent commit และ pre-commit void แล้ว; รอ compensating rollback หลัง commit — F-038
 - [ ] T-358 เก็บ provenance, source row, importer, reviewer, imported_at และ verification status — F-039
 - [ ] T-359 เพิ่ม human review queue สำหรับข้อมูลเดิมก่อนเผยแพร่/นำไปคำนวณ — F-039
 - [ ] T-360 ทำ OCR-assisted staging หลัง CSV path ผ่าน โดยบังคับเทียบต้นฉบับ — F-109
@@ -96,13 +96,13 @@
 - [x] T-406 public trace page — privacy-safe UI พร้อม invalid/void/recall states — F-021
 - [x] T-407 recall/void scenarios — terminal states พร้อม audit — F-108
 - [x] T-408 storage location registry/assignment/movement — Google Sheets, reusable selection และ audit — F-034
-- [ ] T-409 ออกแบบ StockMovement แบบ append-only: RECEIVE/RESERVE/RELEASE/SHIP/ADJUST/RECALL — F-040
-- [ ] T-410 คำนวณ on-hand, reserved, available จาก ledger และห้ามติดลบ — F-040, F-042
+- [x] T-409 ออกแบบและพัฒนา StockMovement แบบ append-only: RECEIVE/RESERVE/RELEASE/SHIP/ADJUST/RECALL พร้อม audit/backup — F-040
+- [x] T-410 คำนวณ on-hand, reserved, available จาก ledger และห้ามติดลบ — F-040, F-042
 - [ ] T-411 เพิ่มมาตรฐานล็อต T1/T2/ผ่าน/พักใช้ตาม controlled list ที่อนุมัติ — F-041
 - [ ] T-412 ทำ allocation/reservation ระบุจำนวน ผู้รับผิดชอบ วันหมดอายุ และเหตุผล — F-042
 - [ ] T-413 กันล็อต VOID/RECALLED/พักใช้/ไม่ผ่านมาตรฐานออกจาก available quantity — F-041, F-042
 - [ ] T-414 เพิ่ม lot timeline แสดงมาตรฐาน ยอดคงเหลือ การจอง สถานที่ และเวลาปรับปรุงล่าสุด — F-040, F-041, F-042
-- [ ] T-415 ทดสอบ reconciliation: ยอดตั้งต้น + รับเข้า - จ่ายออก ± ปรับยอด = คงเหลือ — F-040
+- [x] T-415 ทดสอบ reconciliation, idempotency, unit mismatch, over-reserve/release/ship และ recall — F-040
 
 ## Phase 5 — Operations และ Deployment
 

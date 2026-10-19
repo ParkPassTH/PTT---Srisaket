@@ -11,13 +11,14 @@
     "build": "tsc -p tsconfig.json && node scripts/copy-public.mjs",
     "start": "node dist/src/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test tests/app.test.ts tests/ics-rules.test.ts tests/line-service.test.ts tests/gemini-service.test.ts tests/outbox-service.test.ts tests/backup-service.test.ts",
+    "test": "tsx --test tests/app.test.ts tests/ics-rules.test.ts tests/line-service.test.ts tests/gemini-service.test.ts tests/outbox-service.test.ts tests/backup-service.test.ts tests/stock-service.test.ts tests/import-service.test.ts",
     "test:watch": "tsx --test --watch tests/app.test.ts tests/ics-rules.test.ts",
     "check": "npm run typecheck && npm test && npm run build",
     "smoke:integrations": "tsx scripts/smoke-integrations.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
+    "exceljs": "^4.4.0",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
     "googleapis": "^160.0.0",
@@ -35,5 +36,8 @@
     "supertest": "^7.0.0",
     "tsx": "^4.19.2",
     "typescript": "5.9.3"
+  },
+  "overrides": {
+    "uuid": "11.1.1"
   }
 }

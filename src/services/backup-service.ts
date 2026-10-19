@@ -11,6 +11,7 @@ const entitySchema = z.object({
   activities:z.array(record({ activityId:z.string().min(1), sourceEventId:z.string().min(1), farmerId:z.string().min(1), occurredAt:z.string(), receivedAt:z.string(), processingStatus:z.string(), riskStatus:z.string() })),
   reviews:z.array(record({ reviewId:z.string().min(1), activityId:z.string().min(1), reviewerId:z.string().min(1), decision:z.string(), reason:z.string(), reviewedAt:z.string() })),
   lots:z.array(record({ lotId:z.string().min(1), activityId:z.string().min(1), farmerId:z.string().min(1), traceToken:z.string().min(1), inventoryStatus:z.string() })),
+  stockMovements:z.array(record({ movementId:z.string().min(1), lotId:z.string().min(1), movementType:z.string(), quantity:z.number(), unit:z.string().min(1), reference:z.string().min(1) })).default([]),
   storageLocations:z.array(record({ locationId:z.string().min(1), name:z.string().min(1), status:z.enum(["ACTIVE","INACTIVE"]) })).default([]),
   importBatches:z.array(record({batchId:z.string().min(1),checksum:z.string().min(1),status:z.string()})).default([]),
   importRows:z.array(record({importRowId:z.string().min(1),batchId:z.string().min(1),rowStatus:z.string()})).default([]),
@@ -24,12 +25,12 @@ export class BackupService {
   constructor(private readonly repository: Repository) {}
 
   async export() {
-    const [farmers,plots,activities,reviews,lots,storageLocations,importBatches,auditEvents,outbox] = await Promise.all([
+    const [farmers,plots,activities,reviews,lots,stockMovements,storageLocations,importBatches,auditEvents,outbox] = await Promise.all([
       this.repository.listFarmers(), this.repository.listPlots(), this.repository.listActivities(), this.repository.listAllReviews(),
-      this.repository.listLots(), this.repository.listStorageLocations(), this.repository.listImportBatches(), this.repository.listAllAuditEvents(), this.repository.listOutbox()
+      this.repository.listLots(), this.repository.listStockMovements(), this.repository.listStorageLocations(), this.repository.listImportBatches(), this.repository.listAllAuditEvents(), this.repository.listOutbox()
     ]);
     const importRows=(await Promise.all(importBatches.map((x)=>this.repository.listImportRows(x.batchId)))).flat();
-    const payload = { schemaVersion:1 as const, generatedAt:new Date().toISOString(), entities:{ farmers,plots,activities,reviews,lots,storageLocations,importBatches,importRows,auditEvents,outbox } };
+    const payload = { schemaVersion:1 as const, generatedAt:new Date().toISOString(), entities:{ farmers,plots,activities,reviews,lots,stockMovements,storageLocations,importBatches,importRows,auditEvents,outbox } };
     return { ...payload, checksum:checksum(payload) };
   }
 
@@ -46,11 +47,13 @@ export class BackupService {
     const before = await this.export();
     const existingReviews = new Set((await this.repository.listAllReviews()).map((item) => item.reviewId));
     const existingAudits = new Set((await this.repository.listAllAuditEvents()).map((item) => item.auditId));
+    const existingMovements = new Set((await this.repository.listStockMovements()).map((item) => item.movementId));
     for (const item of archive.entities.farmers) await this.repository.saveFarmer(item as never);
     for (const item of archive.entities.plots) await this.repository.savePlot(item as never);
     for (const item of archive.entities.activities) await this.repository.saveActivity(item as never);
     for (const item of archive.entities.reviews) if (!existingReviews.has(String(item.reviewId))) await this.repository.saveReview(item as never);
     for (const item of archive.entities.lots) await this.repository.saveLot(item as never);
+    for (const item of archive.entities.stockMovements) if (!existingMovements.has(String(item.movementId))) await this.repository.appendStockMovement(item as never);
     for (const item of archive.entities.storageLocations) await this.repository.saveStorageLocation(item as never);
     for (const item of archive.entities.importBatches) await this.repository.saveImportBatch(item as never);
     for (const item of archive.entities.importRows) await this.repository.saveImportRow(item as never);

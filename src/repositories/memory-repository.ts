@@ -1,4 +1,4 @@
-import type { Activity, AuditEvent, Farmer, ImportBatch, ImportRow, Lot, OutboxMessage, Plot, Review, StorageLocation } from "../domain/types.js";
+import type { Activity, AuditEvent, Farmer, ImportBatch, ImportRow, Lot, OutboxMessage, Plot, Review, StockMovement, StorageLocation } from "../domain/types.js";
 import type { ActivityFilters, Repository } from "./repository.js";
 
 /** Empty, process-local repository for tests and local development only. */
@@ -13,6 +13,7 @@ export class MemoryRepository implements Repository {
   private storageLocations = new Map<string, StorageLocation>();
   private importBatches = new Map<string, ImportBatch>();
   private importRows = new Map<string, ImportRow>();
+  private stockMovements: StockMovement[] = [];
 
   async getDashboardSummary() {
     const activities = [...this.activities.values()];
@@ -46,6 +47,13 @@ export class MemoryRepository implements Repository {
   async getLot(id: string) { const item = this.lots.get(id); return item ? structuredClone(item) : undefined; }
   async getLotByTraceToken(token: string) { const item = [...this.lots.values()].find((value) => value.traceToken === token); return item ? structuredClone(item) : undefined; }
   async saveLot(item: Lot) { this.lots.set(item.lotId, structuredClone(item)); }
+  async listStockMovements(lotId?: string) { return this.stockMovements.filter((item) => !lotId || item.lotId === lotId).sort((a,b) => a.occurredAt.localeCompare(b.occurredAt) || a.movementId.localeCompare(b.movementId)).map((item) => structuredClone(item)); }
+  async getStockMovementByReference(lotId: string, reference: string) { const item=this.stockMovements.find((value) => value.lotId===lotId && value.reference===reference); return item ? structuredClone(item) : undefined; }
+  async appendStockMovement(item: StockMovement) {
+    if (this.stockMovements.some((value) => value.movementId === item.movementId)) throw new Error(`Duplicate stock movement: ${item.movementId}`);
+    if (this.stockMovements.some((value) => value.lotId === item.lotId && value.reference === item.reference)) throw new Error(`Duplicate stock reference: ${item.reference}`);
+    this.stockMovements.push(structuredClone(item));
+  }
   async listStorageLocations() { return [...this.storageLocations.values()].sort((a,b) => a.name.localeCompare(b.name,"th")).map((item) => structuredClone(item)); }
   async getStorageLocation(id: string) { const item=this.storageLocations.get(id); return item ? structuredClone(item) : undefined; }
   async saveStorageLocation(item: StorageLocation) { this.storageLocations.set(item.locationId, structuredClone(item)); }

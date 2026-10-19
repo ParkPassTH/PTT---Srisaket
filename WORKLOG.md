@@ -330,3 +330,14 @@
 - เพิ่ม Import Preview API ขั้นต้นสำหรับข้อมูลสมาชิก ตรวจ required/format/duplicate และเก็บ staging โดยไม่เขียน Farmers
 - ใช้ SHA-256 ป้องกัน preview แหล่งข้อมูลเดิมซ้ำ และเก็บ audit `IMPORT_PREVIEW_CREATED`
 - รวม ImportBatches/ImportRows ใน Backup/Restore และเพิ่ม regression test ว่า Preview ไม่เปลี่ยนทะเบียนจริง
+
+## 2026-10-19 — Parallel import workflow and stock ledger
+
+- แบ่งงานผ่าน `docs/AGENT_COORDINATION.md` เป็น Import backend, Import UI และ Stock ledger พร้อม ownership, API contract และ verification log กลาง
+- เพิ่มการอ่าน CSV/XLSX ไม่เกิน 2 MiB, 500 แถว, 50 คอลัมน์ พร้อม column mapping และ Import Preview โดยไม่เขียนทะเบียนจริง
+- เพิ่มหน้า Dashboard สำหรับอัปโหลด/ลากไฟล์ จับคู่คอลัมน์ กรอง valid/error/duplicate/skipped ดาวน์โหลด error CSV และยืนยันเฉพาะ batch `READY`
+- เพิ่ม commit แบบ idempotent, batch checksum, pre-commit void และ audit; รายงาน CSV ป้องกัน spreadsheet formula injection
+- เพิ่ม `StockMovements` แบบ append-only สำหรับ RECEIVE/RESERVE/RELEASE/SHIP/ADJUST/RECALL บน Memory/Google Sheets พร้อม audit และ backup/restore
+- คำนวณ on-hand/reserved/available จาก ledger ป้องกันยอดติดลบ หน่วยไม่ตรง และ reference ซ้ำ; ล็อตใหม่สร้าง RECEIVE อัตโนมัติแบบ idempotent
+- แก้ test fixture ที่หน่วยภาษาไทยเข้ารหัสผิด แล้วตรวจรวม `npm run check` ผ่าน typecheck, automated tests 43/43 และ production build
+- ตรวจหน้า Import บน desktop/mobile ตาม Impeccable; mobile viewport 390px ไม่มี horizontal overflow และบันทึกภาพตรวจไว้ใน `.impeccable/review`

@@ -82,6 +82,10 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9.5 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM17 11l2 2 3-4"/></svg>
           เกษตรกรและแปลง
         </button>
+        <button class="nav-item" data-view="imports">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v3h16v-3"/></svg>
+          นำเข้าข้อมูลเดิม
+        </button>
         <button class="nav-item" data-view="reports">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
           รายงาน
@@ -186,6 +190,49 @@
         <section class="registry-panel"><header class="panel-head"><div><h2>สถานที่จัดเก็บ</h2><p id="storage-count">กำลังโหลด...</p></div></header><div id="storage-list" class="farmer-list"></div></section>
         <section class="registry-panel"><header class="panel-head"><div><h2>ล็อตทั้งหมด</h2><p id="lot-count">กำลังโหลด...</p></div></header><div id="lot-list" class="lot-list"></div></section>
         <section class="registry-panel"><header class="panel-head"><div><h2>พร้อมสร้างล็อต</h2><p>กิจกรรมที่อนุมัติแล้วและยังไม่เคยสร้างล็อต</p></div></header><div id="harvest-list" class="farmer-list"></div></section>
+      </div>
+
+      <div id="imports-content" class="page-content" hidden>
+        <section class="page-intro import-intro">
+          <div><h2>นำเข้าทะเบียนเกษตรกรเดิม</h2><p>ตรวจไฟล์ จับคู่คอลัมน์ และดูข้อผิดพลาดก่อนบันทึกจริง ข้อมูลจะยังไม่เข้าทะเบียนจนกว่าจะยืนยัน</p></div>
+        </section>
+
+        <section class="registry-panel import-workspace" aria-labelledby="import-file-title">
+          <header class="panel-head"><div><h2 id="import-file-title">เลือกไฟล์ต้นทาง</h2><p>รองรับ CSV หรือ Excel (.xlsx) สูงสุด 2 MB, 500 แถว และ 50 คอลัมน์</p></div></header>
+          <div class="import-file-step">
+            <label id="import-dropzone" class="file-dropzone" for="import-file">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0 4 4m-4-4L8 8M5 14v5h14v-5"/></svg>
+              <strong>เลือกไฟล์ หรือลากมาวางที่นี่</strong>
+              <span>ระบบจะอ่านตัวอย่างเพื่อจับคู่คอลัมน์ก่อน ไม่มีการบันทึกข้อมูลในขั้นนี้</span>
+              <input id="import-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+            </label>
+            <div id="import-file-status" class="import-inline-status" role="status" aria-live="polite">ยังไม่ได้เลือกไฟล์</div>
+          </div>
+        </section>
+
+        <section id="import-mapping-panel" class="registry-panel" aria-labelledby="import-mapping-title" hidden>
+          <header class="panel-head"><div><h2 id="import-mapping-title">จับคู่คอลัมน์</h2><p>เลือกหัวคอลัมน์จากไฟล์ให้ตรงกับข้อมูลในทะเบียน</p></div><span id="import-source-summary" class="member-code"></span></header>
+          <form id="import-mapping-form" class="mapping-form">
+            <label><span>รหัสสมาชิก <strong aria-label="จำเป็น">*</strong></span><select id="map-member-code" required><option value="">เลือกคอลัมน์...</option></select><small>ต้องไม่ซ้ำ และใช้ตัวอักษร ตัวเลข _ หรือ - จำนวน 2–30 ตัว</small></label>
+            <label><span>ชื่อเกษตรกร <strong aria-label="จำเป็น">*</strong></span><select id="map-display-name" required><option value="">เลือกคอลัมน์...</option></select><small>ชื่อที่ใช้แสดงในทะเบียนและหน้าตรวจสอบ</small></label>
+            <div class="mapping-actions"><button id="reset-import" class="button secondary-button" type="button">เลือกไฟล์ใหม่</button><button id="preview-import" class="button button-primary" type="submit">ตรวจข้อมูลก่อนนำเข้า</button></div>
+            <p id="import-mapping-error" class="form-error" role="alert" hidden></p>
+          </form>
+        </section>
+
+        <section id="import-preview-panel" class="registry-panel import-preview" aria-labelledby="import-preview-title" hidden>
+          <header class="panel-head import-preview-head"><div><h2 id="import-preview-title">ผลตรวจข้อมูลก่อนนำเข้า</h2><p id="import-preview-note">ตรวจพบจากไฟล์ต้นทาง ยังไม่มีข้อมูลถูกบันทึกเข้าทะเบียน</p></div><div class="preview-actions"><a id="import-error-report" class="button secondary-button download-link" href="#" hidden>ดาวน์โหลดรายการที่ต้องแก้</a><button id="commit-import" class="button button-primary" type="button">ยืนยันนำเข้ารายการที่พร้อม</button></div></header>
+          <div id="import-summary" class="import-summary" aria-label="สรุปผลการตรวจ"></div>
+          <div class="import-results-toolbar">
+            <label for="import-result-filter">แสดงรายการ</label>
+            <select id="import-result-filter"><option value="">ทั้งหมด</option><option value="VALID">พร้อมนำเข้า</option><option value="ERROR">ข้อมูลผิดพลาด</option><option value="DUPLICATE">ข้อมูลซ้ำ</option><option value="SKIPPED">ข้าม</option></select>
+            <span id="import-result-count" aria-live="polite"></span>
+          </div>
+          <div class="table-wrap import-table-wrap"><table class="import-table"><thead><tr><th>แถว</th><th>รหัสสมาชิก</th><th>ชื่อเกษตรกร</th><th>ผลตรวจ</th><th>รายละเอียด / วิธีแก้</th></tr></thead><tbody id="import-result-rows"></tbody></table></div>
+          <div id="import-results-empty" class="empty-state" hidden><strong>ไม่พบรายการในสถานะนี้</strong><p>เลือก “ทั้งหมด” เพื่อดูผลการตรวจทุกแถว</p></div>
+          <div class="import-decision"><label for="import-reason">เหตุผลการนำเข้า</label><textarea id="import-reason" minlength="5" maxlength="500" placeholder="เช่น นำเข้าทะเบียนสมาชิกจากไฟล์ที่ทีมส่งเสริมตรวจแล้ว"></textarea><p>ระบบจะบันทึกชื่อไฟล์ ผู้ดำเนินการ เวลา และผลตรวจไว้ใน Audit Trail</p></div>
+          <div id="import-operation-error" class="operation-error" role="alert" hidden><strong>ยังดำเนินการไม่ได้</strong><p></p><button id="retry-import-operation" class="text-button" type="button">ลองอีกครั้ง</button></div>
+        </section>
       </div>
 
       <div id="reports-content" class="page-content" hidden>

@@ -1,4 +1,4 @@
-import type { Activity, AuditEvent, Farmer, ImportBatch, ImportRow, Lot, OutboxMessage, Plot, Review, StorageLocation } from "../domain/types.js";
+import type { Activity, AuditEvent, Farmer, ImportBatch, ImportRow, Lot, OutboxMessage, Plot, Review, StockMovement, StorageLocation } from "../domain/types.js";
 
 export interface ActivityFilters {
   status?: string;
@@ -25,6 +25,9 @@ export interface Repository {
   getLot(lotId: string): Promise<Lot | undefined>;
   getLotByTraceToken(traceToken: string): Promise<Lot | undefined>;
   saveLot(lot: Lot): Promise<void>;
+  listStockMovements(lotId?: string): Promise<StockMovement[]>;
+  getStockMovementByReference(lotId: string, reference: string): Promise<StockMovement | undefined>;
+  appendStockMovement(movement: StockMovement): Promise<void>;
   listStorageLocations(): Promise<StorageLocation[]>;
   getStorageLocation(locationId: string): Promise<StorageLocation | undefined>;
   saveStorageLocation(location: StorageLocation): Promise<void>;

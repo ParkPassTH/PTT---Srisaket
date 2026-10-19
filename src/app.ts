@@ -18,6 +18,7 @@ import type { Farmer, Plot } from "./domain/types.js";
 import { OutboxService } from "./services/outbox-service.js";
 import { BackupService } from "./services/backup-service.js";
 import { ImportService } from "./services/import-service.js";
+import { StockService } from "./services/stock-service.js";
 
 const loginSchema = z.object({ email: z.string().email(), password: z.string().min(8) });
 const reviewSchema = z.object({
@@ -45,7 +46,19 @@ const activityCorrectionSchema = z.object({
   harvestAmount:z.coerce.number().nonnegative().optional(), harvestUnit:z.string().trim().max(30).optional(), reason:z.string().trim().min(5).max(500)
 });
 const restoreSchema = z.object({ confirm:z.literal("MERGE_BACKUP"), reason:z.string().trim().min(5).max(500), archive:z.unknown() });
-const importPreviewSchema=z.object({sourceName:z.string().trim().min(1).max(200),rows:z.array(z.record(z.unknown())).min(1).max(500)});
+const importFarmerFields = ["memberCode", "displayName", "lineUserId", "status", "address", "phone", "registeredAt", "totalAreaRai"] as const;
+const importPreviewSchema=z.object({
+  sourceName:z.string().trim().min(1).max(200), sourceType:z.enum(["CSV","XLSX"]).optional(),
+  rows:z.array(z.record(z.unknown())).min(1).max(500),
+  mapping:z.record(z.enum(importFarmerFields),z.string().trim().min(1).max(120)).optional()
+});
+const importParseSchema=z.object({sourceName:z.string().trim().min(1).max(200),contentBase64:z.string().min(1)});
+const importActionSchema=z.object({reason:z.string().trim().min(5).max(500)});
+const stockMovementSchema=z.object({
+  type:z.enum(["RECEIVE","RESERVE","RELEASE","SHIP","ADJUST","RECALL"]),
+  quantity:z.coerce.number().finite(), unit:z.string().trim().min(1).max(30),
+  reason:z.string().trim().min(5).max(500), reference:z.string().trim().min(1).max(200)
+});
 
 // Helmet publishes conditional ESM/CJS exports. Normalize the export explicitly
 // so TypeScript/Vercel and local Node builds agree on the callable middleware.
@@ -62,6 +75,7 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
   const outboxService = new OutboxService(config, repository);
   const backupService = new BackupService(repository);
   const importService = new ImportService(repository);
+  const stockService = new StockService(repository);
   const publicDirectory = fileURLToPath(new URL("../public", import.meta.url));
 
   app.set("trust proxy", 1);
@@ -88,6 +102,7 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
   });
 
   app.use("/api/system/backup", express.json({ limit:"5mb" }));
+  app.use("/api/imports/parse", express.json({ limit:"3mb" }));
   app.use(express.json({ limit: "256kb" }));
   app.use(rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -184,6 +199,26 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
 
   app.post("/api/imports/preview", auth.requireUser, auth.requireRole("ADMIN"), async (request,response,next)=>{
     try{const input=importPreviewSchema.parse(request.body);response.status(201).json(await importService.preview(input,request.user!.userId));}catch(error){next(error);}
+  });
+
+  app.post("/api/imports/parse", auth.requireUser, auth.requireRole("ADMIN"), async (request,response,next)=>{
+    try{response.json(await importService.parseFile(importParseSchema.parse(request.body)));}catch(error){next(error);}
+  });
+
+  app.get("/api/imports/:batchId", auth.requireUser, auth.requireRole("ADMIN"), async (request,response,next)=>{
+    try{response.json(await importService.getBatch(z.string().min(1).parse(request.params.batchId)));}catch(error){next(error);}
+  });
+
+  app.get("/api/imports/:batchId/errors.csv", auth.requireUser, auth.requireRole("ADMIN"), async (request,response,next)=>{
+    try{const batchId=z.string().min(1).parse(request.params.batchId);response.type("text/csv").attachment(`import-errors-${batchId}.csv`).send(await importService.errorReportCsv(batchId));}catch(error){next(error);}
+  });
+
+  app.post("/api/imports/:batchId/commit", auth.requireUser, auth.requireRole("ADMIN"), async (request,response,next)=>{
+    try{const input=importActionSchema.parse(request.body);response.json(await importService.commit(z.string().min(1).parse(request.params.batchId),request.user!.userId,input.reason));}catch(error){next(error);}
+  });
+
+  app.post("/api/imports/:batchId/void", auth.requireUser, auth.requireRole("ADMIN"), async (request,response,next)=>{
+    try{const input=importActionSchema.parse(request.body);response.json(await importService.void(z.string().min(1).parse(request.params.batchId),request.user!.userId,input.reason));}catch(error){next(error);}
   });
 
   app.get("/api/farmers", auth.requireUser, async (_request, response, next) => {
@@ -344,6 +379,22 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
     }
   });
 
+  app.get("/api/lots/:lotId/stock", auth.requireUser, async (request,response,next) => {
+    try {
+      const lotId=request.params.lotId as string;
+      const [balance,movements]=await Promise.all([stockService.getBalance(lotId),repository.listStockMovements(lotId)]);
+      response.json({balance,movements});
+    } catch(error){ next(error); }
+  });
+
+  app.post("/api/lots/:lotId/stock-movements",auth.requireUser,auth.requireRole("WAREHOUSE","ADMIN"),async(request,response,next)=>{
+    try {
+      const input=stockMovementSchema.parse(request.body);
+      const result=await stockService.record({lotId:request.params.lotId as string,movementType:input.type,quantity:input.quantity,unit:input.unit,reason:input.reason,reference:input.reference,actorId:request.user!.userId});
+      response.status(result.created?201:200).json(result);
+    } catch(error){ next(error); }
+  });
+
   app.get("/api/storage-locations", auth.requireUser, async (_request, response, next) => {
     try { response.json({ locations:await repository.listStorageLocations() }); } catch (error) { next(error); }
   });
@@ -378,7 +429,8 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
       await repository.saveActivity(linkedActivity);
       await repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"LOT", entityId:lot.lotId, actorId:request.user!.userId, action:"CREATE_FROM_ACTIVITY", after:lot, occurredAt:now });
       await repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"ACTIVITY", entityId:activity.activityId, actorId:request.user!.userId, action:"LINK_LOT", before:activity, after:linkedActivity, occurredAt:now });
-      response.status(201).json({ lot });
+      const {balance}=await stockService.receiveLot(lot.lotId,request.user!.userId,`lot-create:${activity.activityId}`);
+      response.status(201).json({ lot,balance });
     } catch (error) { next(error); }
   });
 
