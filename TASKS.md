@@ -2,7 +2,7 @@
 
 > ทุก task ต้องอ้างอิง Feature ID เมื่อเกี่ยวข้อง และอัปเดตสถานะพร้อม `WORKLOG.md`
 >
-> อัปเดตล่าสุด: 18 ตุลาคม 2569
+> อัปเดตล่าสุด: 19 ตุลาคม 2569
 
 ## สถานะ
 
@@ -24,6 +24,10 @@
 - [ ] T-008 ยืนยันรายการสาร กฎ และผู้มีอำนาจอนุมัติ
 - [ ] T-009 ยืนยัน privacy/retention policy ของเสียงและข้อมูลเกษตรกร
 - [ ] T-010 ให้ผู้จัดการ ICS/หน่วยรับรองอนุมัติ checklist, controlled input list และ sanction matrix ใน `docs/ICS_RECORDING_GUIDE.md`
+- [ ] T-011 สัมภาษณ์ผู้ถือข้อมูลและทำ data inventory: กระดาษ, Excel/CSV, Google Sheets, โปรแกรมเดิม — F-035
+- [ ] T-012 ขอ sample ที่ปกปิดข้อมูลและหนังสืออนุญาตใช้ในการ PoC — F-035, F-044
+- [ ] T-013 ทำ field mapping/data contract และนิยาม required fields, วันที่, หน่วย, T1/T2 กับผู้รับผิดชอบ — F-035, F-041
+- [ ] T-014 เก็บ baseline กระบวนการเดิม: เวลา, จุดกรอกซ้ำ, ข้อมูลขาด, จำนวนครั้งแก้ และความคลาดเคลื่อนล็อต — F-043, F-044
 
 ## Phase 1 — Architecture และ Foundation
 
@@ -68,6 +72,20 @@
 - [x] T-310 integration status panel — ตรวจ Sheets, LINE, AI และ public trace โดยไม่เผย secret — F-106
 - [-] T-309 responsive and accessibility verification — desktop/mobile captures พร้อม รอ formal audit
 
+## Phase 3A — Legacy Data Migration และ Data Quality
+
+- [ ] T-351 ออกแบบ import batch/domain และ staging repository แยกจากข้อมูลใช้งานจริง — F-036, F-038
+- [ ] T-352 รองรับ CSV/XLSX upload แบบจำกัดขนาด ชนิดไฟล์ และสแกนสูตร/ข้อมูลอันตราย — F-036
+- [ ] T-353 ทำ column mapping พร้อมบันทึก template ต่อแหล่งข้อมูล — F-036
+- [ ] T-354 ทำ Import Preview แสดง valid/error/duplicate/skipped ก่อน commit — F-036, F-037
+- [ ] T-355 ตรวจ required fields, stable ID, duplicate, วันที่, หน่วย และ farmer–plot–lot relationship — F-037
+- [ ] T-356 ทำ error report ดาวน์โหลดได้ พร้อมเลขแถว สาเหตุ และวิธีแก้ — F-037
+- [ ] T-357 ทำ dry run, batch checksum, idempotent commit และ rollback/void batch — F-038
+- [ ] T-358 เก็บ provenance, source row, importer, reviewer, imported_at และ verification status — F-039
+- [ ] T-359 เพิ่ม human review queue สำหรับข้อมูลเดิมก่อนเผยแพร่/นำไปคำนวณ — F-039
+- [ ] T-360 ทำ OCR-assisted staging หลัง CSV path ผ่าน โดยบังคับเทียบต้นฉบับ — F-109
+- [ ] T-361 ประเมิน legacy API/export หลังชุมชนยืนยันระบบและสิทธิ์ — F-110
+
 ## Phase 4 — Inventory และ Traceability
 
 - [x] T-401 harvest eligibility service — ต้องระบุว่าเก็บเกี่ยว ได้รับอนุมัติ และข้อมูลพืช/แปลง/ปริมาณ/หน่วยครบ — F-017
@@ -78,6 +96,13 @@
 - [x] T-406 public trace page — privacy-safe UI พร้อม invalid/void/recall states — F-021
 - [x] T-407 recall/void scenarios — terminal states พร้อม audit — F-108
 - [x] T-408 storage location registry/assignment/movement — Google Sheets, reusable selection และ audit — F-034
+- [ ] T-409 ออกแบบ StockMovement แบบ append-only: RECEIVE/RESERVE/RELEASE/SHIP/ADJUST/RECALL — F-040
+- [ ] T-410 คำนวณ on-hand, reserved, available จาก ledger และห้ามติดลบ — F-040, F-042
+- [ ] T-411 เพิ่มมาตรฐานล็อต T1/T2/ผ่าน/พักใช้ตาม controlled list ที่อนุมัติ — F-041
+- [ ] T-412 ทำ allocation/reservation ระบุจำนวน ผู้รับผิดชอบ วันหมดอายุ และเหตุผล — F-042
+- [ ] T-413 กันล็อต VOID/RECALLED/พักใช้/ไม่ผ่านมาตรฐานออกจาก available quantity — F-041, F-042
+- [ ] T-414 เพิ่ม lot timeline แสดงมาตรฐาน ยอดคงเหลือ การจอง สถานที่ และเวลาปรับปรุงล่าสุด — F-040, F-041, F-042
+- [ ] T-415 ทดสอบ reconciliation: ยอดตั้งต้น + รับเข้า - จ่ายออก ± ปรับยอด = คงเหลือ — F-040
 
 ## Phase 5 — Operations และ Deployment
 
@@ -101,10 +126,16 @@
 - [x] T-608 troubleshooting guide
 - [ ] T-609 deployment verification checklist
 - [ ] T-610 final feature/task reconciliation
+- [ ] T-611 สร้าง Impact Dashboard จาก metric definitions ที่อนุมัติ ห้ามสร้างเปอร์เซ็นต์สมมติ — F-043
+- [ ] T-612 จัดทำ Process Map แบบ As-Is/To-Be พร้อม owner, handoff, pain point และ control — F-044
+- [ ] T-613 จัดทำ Test Report ระบุ input, expected, actual, pass/fail, defect และหลักฐาน — F-044
+- [ ] T-614 ทำ controlled pilot กลุ่มเล็กด้วย consent และ rollback criteria — F-044
+- [ ] T-615 เปรียบเทียบ baseline/after ด้วยชุดข้อมูลเดียวกันและรายงานข้อจำกัด — F-043, F-044
+- [ ] T-616 จัดชุดนำเสนอกรรมการ: Process Map, Working PoC, Test Report, Implementation Plan — F-044
 
 ## Current Gate
 
-ทดสอบ production end-to-end ด้วยข้อมูลจริง: เพิ่มสมาชิก/แปลงจาก Dashboard → ลงทะเบียน LINE → ส่งเสียง → ยืนยัน/ตรวจสอบ → สร้างล็อต → ดาวน์โหลด QR → เปิด public trace
+Gate ถัดไปคือ **ยืนยันแหล่งข้อมูลจริงและ sample ที่ได้รับอนุญาต** ก่อนสร้าง importer จากนั้นทำ CSV/XLSX Preview + Data Quality + controlled commit ให้ผ่านด้วยข้อมูลจำลองและ sample ที่ปกปิดแล้ว จึงพัฒนา stock ledger/T1–T2/allocation และวัดผล pilot; ห้ามกล่าวอ้างว่าลดการกรอกซ้ำหรือยอดล็อตถูกต้องจนกว่าจะมีผลทดสอบก่อน–หลัง
 
 ## Efficiency Review — 18 ต.ค. 2569
 

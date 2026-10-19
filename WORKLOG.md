@@ -312,3 +312,12 @@
 - เพิ่มปุ่มเปลี่ยนสถานที่จัดเก็บ บังคับเหตุผล และ audit `LOT_STORAGE_MOVED` พร้อม before/after
 - เพิ่ม audit `STORAGE_LOCATION_CREATED` และรวม StorageLocations ใน Backup/Restore
 - หน้าเว็บแสดงสถานที่ปัจจุบันของแต่ละล็อตและรายการสถานที่ที่เคยกรอก
+
+## 2026-10-19 — Roadmap realignment from Data Pack critique
+
+- ตรวจระบบจริงเทียบข้อเสนอเรื่องข้อมูลเดิม Import Preview, Data Quality, Human Review, LotMatch, Impact Dashboard และ evidence pack
+- ยืนยันว่า voice/review/audit/traceability ใช้งานได้ แต่ legacy import, stock ledger, T1/T2, allocation และ impact measurement ยังเป็นช่องว่าง
+- เพิ่ม F-035–F-044 และ F-109–F-110 พร้อม acceptance criteria โดยไม่เปลี่ยนสถานะเป็น Implemented ก่อนมีหลักฐาน
+- เพิ่ม Phase 3A สำหรับ migration/data quality และขยาย Phase 4/6 สำหรับ stock ledger, pilot และหลักฐานกรรมการ
+- สร้าง `docs/REQUIREMENTS_ALIGNMENT_PLAN.md` เป็นแผน Gate 0–6, Definition of Done และข้อห้ามการกล่าวอ้างเกินจริง
+- คง durable multi-user/RBAC เป็นงานท้ายสุดตามคำขอเดิม แต่ระบุว่าต้องปิดก่อนใช้งานหลายเจ้าหน้าที่จริง

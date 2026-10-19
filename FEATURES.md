@@ -2,7 +2,7 @@
 
 > Source of truth สำหรับฟีเจอร์ทั้งหมดของระบบ การเพิ่ม ลด หรือเปลี่ยนขอบเขตต้องอัปเดตไฟล์นี้พร้อม `TASKS.md` และ `WORKLOG.md`
 >
-> เวอร์ชัน: 0.1.0 · อัปเดตล่าสุด: 17 ตุลาคม 2569
+> เวอร์ชัน: 0.2.0 · อัปเดตล่าสุด: 19 ตุลาคม 2569
 
 ## สถานะ
 
@@ -53,6 +53,16 @@
 | F-032 | ต่อบทสนทนาในกิจกรรมเดิม | เกษตรกร | Implemented | หลังเจ้าหน้าที่ขอข้อมูล เสียงถัดไปเติม activity เดิมและเก็บ source event ทุกครั้ง |
 | F-033 | จับคู่แปลงอัตโนมัติจากทะเบียน | เกษตรกร/ICS | Implemented | รองรับรหัส ชื่อ “แปลง 1/แปลงหนึ่ง” และเลือกแปลงเดียวอัตโนมัติ พร้อมเติมพืชจากทะเบียน |
 | F-034 | ทะเบียนสถานที่จัดเก็บและประวัติย้ายล็อต | Warehouse/Admin | Done | เลือกสถานที่เดิมเมื่อสร้างล็อต เพิ่มสถานที่ใหม่ และย้ายพร้อมเหตุผล/snapshot ก่อน–หลัง |
+| F-035 | สำรวจแหล่งข้อมูลเดิมและ Data Contract | เจ้าหน้าที่/ผู้ดูแลข้อมูล | Planned | ยืนยันว่าเอกสารอยู่ที่ใคร รูปแบบใด เจ้าของข้อมูลและสิทธิ์ใช้งาน พร้อม sample ที่ปกปิดข้อมูล |
+| F-036 | CSV/XLSX Import Preview และ Column Mapping | เจ้าหน้าที่นำเข้า | Planned | อัปโหลดไฟล์ จับคู่คอลัมน์ ดูตัวอย่าง และยังไม่เขียนข้อมูลจนกดยืนยัน |
+| F-037 | Data Quality Check และ Error Report | เจ้าหน้าที่/ICS | Planned | ตรวจรหัสซ้ำ ช่องบังคับ วันที่ หน่วย ความสัมพันธ์เกษตรกร–แปลง–ล็อต และดาวน์โหลดรายการที่ต้องแก้ได้ |
+| F-038 | Controlled Import, Idempotency และ Rollback | Admin | Planned | dry run, import batch ID, ป้องกันนำเข้าซ้ำ, commit แบบตรวจสอบได้ และย้อน batch ได้โดยไม่ลบ audit |
+| F-039 | Provenance และสถานะตรวจทานข้อมูลเดิม | ICS/Auditor | Planned | ทุกแถวระบุแหล่งที่มา batch ผู้ตรวจ สถานะ VERIFIED/NEEDS_REVIEW และไม่อ้างว่าผ่านมาตรฐานอัตโนมัติ |
+| F-040 | Stock Movement Ledger และยอดคงเหลือ | Warehouse/ICS | Planned | รับเข้า จอง ปลดจอง จ่ายออก ปรับยอด เรียกคืน พร้อมยอดคงเหลือที่คำนวณจาก ledger และ audit |
+| F-041 | สถานะมาตรฐาน T1/T2/ผ่าน/พักใช้ | ICS | Planned | ใช้รายการสถานะที่ผู้รับผิดชอบ ICS อนุมัติ พร้อมเหตุผล วันมีผล และประวัติเปลี่ยนแปลง |
+| F-042 | Lot Allocation และ Available Quantity | Warehouse | Planned | แยก on-hand/reserved/available และกันล็อตที่ไม่ผ่านเงื่อนไขออกจากยอดจัดสรรโดยกฎที่อนุมัติแล้ว |
+| F-043 | Impact Dashboard | ผู้จัดการ/กรรมการ | Planned | แสดงเวลาทำงาน ข้อมูลขาด รายการซ้ำ งานแก้ และความคลาดเคลื่อนล็อตจากข้อมูลวัดจริงก่อน–หลัง |
+| F-044 | PoC Evidence Pack และ Pilot Measurement | กรรมการ/ทีมโครงการ | Planned | มี Process Map, Working PoC, Test Report expected-vs-actual และ Implementation/Pilot Plan ที่ตรวจย้อนกลับได้ |
 
 ## P1 — ควรมีหลังแกนหลักเสถียร
 
@@ -66,6 +76,8 @@
 | F-106 | System status panel | Admin | Partial | แสดง readiness ของ Sheets, LINE, AI, trace; รอ quota/queue metrics |
 | F-107 | Data correction workflow | เกษตรกร/ICS | Done | แก้รายการเดิมด้วยเสียง แสดงก่อน–หลัง เพิ่ม revision และเก็บ audit; รายการที่สร้างล็อตแล้วส่งให้เจ้าหน้าที่ |
 | F-108 | Lot recall workflow | Warehouse/Admin | Planned | RECALL พร้อมเหตุผลและผลกระทบ |
+| F-109 | OCR-assisted paper import | เจ้าหน้าที่นำเข้า | Planned | รับภาพเอกสารโดยได้รับอนุญาต, OCR เป็นฉบับร่าง และมนุษย์เทียบต้นฉบับก่อน commit |
+| F-110 | Legacy system/API connector | Developer/Admin | Planned | ทำเมื่อชุมชนยืนยันระบบเดิม การ export/API และสิทธิ์เข้าถึงแล้วเท่านั้น |
 
 ## Deferred
 
@@ -103,3 +115,4 @@
 | 18 ต.ค. 2569 | ขยาย correction workflow ให้แก้รายการที่ยืนยันแล้ว | รองรับ `แก้ไขล่าสุด`, session 30 นาที, revision, เปรียบเทียบก่อน–หลัง และป้องกันแก้รายการที่สร้างล็อตแล้ว | Codex |
 | 18 ต.ค. 2569 | บังคับกิจกรรมเก็บเกี่ยวก่อนสร้างล็อต | ป้องกันกิจกรรมประเภทอื่นที่มีปริมาณ/หน่วยติดมาถูกสร้างเป็นสินค้า | Codex |
 | 18 ต.ค. 2569 | เพิ่มทะเบียนและประวัติสถานที่จัดเก็บ | ลดการพิมพ์ชื่อซ้ำ เลือกข้อมูลเดิมได้ และตรวจสอบการย้ายล็อตย้อนหลัง | Codex |
+| 19 ต.ค. 2569 | ปรับ roadmap ตามข้อวิจารณ์ Data Pack/PoC | เพิ่ม migration, data quality, stock ledger, T1/T2, allocation, impact measurement และ evidence pack โดยไม่กล่าวอ้างเกินหลักฐาน | Codex |
