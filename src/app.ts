@@ -17,6 +17,7 @@ import { evaluateIcsRisk } from "./domain/ics-rules.js";
 import type { Farmer, Plot } from "./domain/types.js";
 import { OutboxService } from "./services/outbox-service.js";
 import { BackupService } from "./services/backup-service.js";
+import { ImportService } from "./services/import-service.js";
 
 const loginSchema = z.object({ email: z.string().email(), password: z.string().min(8) });
 const reviewSchema = z.object({
@@ -44,6 +45,7 @@ const activityCorrectionSchema = z.object({
   harvestAmount:z.coerce.number().nonnegative().optional(), harvestUnit:z.string().trim().max(30).optional(), reason:z.string().trim().min(5).max(500)
 });
 const restoreSchema = z.object({ confirm:z.literal("MERGE_BACKUP"), reason:z.string().trim().min(5).max(500), archive:z.unknown() });
+const importPreviewSchema=z.object({sourceName:z.string().trim().min(1).max(200),rows:z.array(z.record(z.unknown())).min(1).max(500)});
 
 // Helmet publishes conditional ESM/CJS exports. Normalize the export explicitly
 // so TypeScript/Vercel and local Node builds agree on the callable middleware.
@@ -59,6 +61,7 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
   const lineService = new LineService(config, repository, createVoiceAnalyzer(config));
   const outboxService = new OutboxService(config, repository);
   const backupService = new BackupService(repository);
+  const importService = new ImportService(repository);
   const publicDirectory = fileURLToPath(new URL("../public", import.meta.url));
 
   app.set("trust proxy", 1);
@@ -177,6 +180,10 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
   app.post("/api/system/backup/restore", auth.requireUser, auth.requireRole("ADMIN"), async (request, response, next) => {
     try { const input=restoreSchema.parse(request.body); response.json({ restored:await backupService.merge(input.archive, request.user!.userId, input.reason) }); }
     catch (error) { next(error); }
+  });
+
+  app.post("/api/imports/preview", auth.requireUser, auth.requireRole("ADMIN"), async (request,response,next)=>{
+    try{const input=importPreviewSchema.parse(request.body);response.status(201).json(await importService.preview(input,request.user!.userId));}catch(error){next(error);}
   });
 
   app.get("/api/farmers", auth.requireUser, async (_request, response, next) => {

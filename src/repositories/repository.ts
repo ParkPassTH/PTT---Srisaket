@@ -1,4 +1,4 @@
-import type { Activity, AuditEvent, Farmer, Lot, OutboxMessage, Plot, Review, StorageLocation } from "../domain/types.js";
+import type { Activity, AuditEvent, Farmer, ImportBatch, ImportRow, Lot, OutboxMessage, Plot, Review, StorageLocation } from "../domain/types.js";
 
 export interface ActivityFilters {
   status?: string;
@@ -28,6 +28,12 @@ export interface Repository {
   listStorageLocations(): Promise<StorageLocation[]>;
   getStorageLocation(locationId: string): Promise<StorageLocation | undefined>;
   saveStorageLocation(location: StorageLocation): Promise<void>;
+  listImportBatches(): Promise<ImportBatch[]>;
+  getImportBatch(batchId: string): Promise<ImportBatch | undefined>;
+  getImportBatchByChecksum(checksum: string, entityType: ImportBatch["entityType"]): Promise<ImportBatch | undefined>;
+  saveImportBatch(batch: ImportBatch): Promise<void>;
+  listImportRows(batchId: string): Promise<ImportRow[]>;
+  saveImportRow(row: ImportRow): Promise<void>;
   getFarmerByLineUserId(lineUserId: string): Promise<Farmer | undefined>;
   getFarmerByMemberCode(memberCode: string): Promise<Farmer | undefined>;
   listFarmers(): Promise<Farmer[]>;

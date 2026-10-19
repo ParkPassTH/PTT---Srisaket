@@ -74,10 +74,10 @@
 
 ## Phase 3A — Legacy Data Migration และ Data Quality
 
-- [ ] T-351 ออกแบบ import batch/domain และ staging repository แยกจากข้อมูลใช้งานจริง — F-036, F-038
+- [x] T-351 ออกแบบ import batch/domain และ staging repository แยกจากข้อมูลใช้งานจริง — F-036, F-038
 - [ ] T-352 รองรับ CSV/XLSX upload แบบจำกัดขนาด ชนิดไฟล์ และสแกนสูตร/ข้อมูลอันตราย — F-036
 - [ ] T-353 ทำ column mapping พร้อมบันทึก template ต่อแหล่งข้อมูล — F-036
-- [ ] T-354 ทำ Import Preview แสดง valid/error/duplicate/skipped ก่อน commit — F-036, F-037
+- [-] T-354 ทำ Import Preview แสดง valid/error/duplicate/skipped ก่อน commit — API staging สำหรับ FARMER พร้อม; รอ file parser/UI — F-036, F-037
 - [ ] T-355 ตรวจ required fields, stable ID, duplicate, วันที่, หน่วย และ farmer–plot–lot relationship — F-037
 - [ ] T-356 ทำ error report ดาวน์โหลดได้ พร้อมเลขแถว สาเหตุ และวิธีแก้ — F-037
 - [ ] T-357 ทำ dry run, batch checksum, idempotent commit และ rollback/void batch — F-038

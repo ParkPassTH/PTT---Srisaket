@@ -321,3 +321,12 @@
 - เพิ่ม Phase 3A สำหรับ migration/data quality และขยาย Phase 4/6 สำหรับ stock ledger, pilot และหลักฐานกรรมการ
 - สร้าง `docs/REQUIREMENTS_ALIGNMENT_PLAN.md` เป็นแผน Gate 0–6, Definition of Done และข้อห้ามการกล่าวอ้างเกินจริง
 - คง durable multi-user/RBAC เป็นงานท้ายสุดตามคำขอเดิม แต่ระบุว่าต้องปิดก่อนใช้งานหลายเจ้าหน้าที่จริง
+
+## 2026-10-19 — Database contract and import staging foundation
+
+- สร้าง `docs/DATABASE.md` เป็น source of truth สำหรับ entities, keys, relations, invariants, audit, backup และแนวทางย้ายจาก Sheets ไป PostgreSQL
+- กำหนด target schema สำหรับ ImportBatch, ImportRow, StockMovement และ LotStandardHistory ก่อนเริ่ม implementation
+- เพิ่มชีต/adapter `ImportBatches` และ `ImportRows` ผ่าน Repository contract โดยไม่ผูก service กับเลขแถวของ Google Sheets
+- เพิ่ม Import Preview API ขั้นต้นสำหรับข้อมูลสมาชิก ตรวจ required/format/duplicate และเก็บ staging โดยไม่เขียน Farmers
+- ใช้ SHA-256 ป้องกัน preview แหล่งข้อมูลเดิมซ้ำ และเก็บ audit `IMPORT_PREVIEW_CREATED`
+- รวม ImportBatches/ImportRows ใน Backup/Restore และเพิ่ม regression test ว่า Preview ไม่เปลี่ยนทะเบียนจริง

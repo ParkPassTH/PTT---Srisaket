@@ -1,4 +1,4 @@
-import type { Activity, AuditEvent, Farmer, Lot, OutboxMessage, Plot, Review, StorageLocation } from "../domain/types.js";
+import type { Activity, AuditEvent, Farmer, ImportBatch, ImportRow, Lot, OutboxMessage, Plot, Review, StorageLocation } from "../domain/types.js";
 import type { ActivityFilters, Repository } from "./repository.js";
 
 /** Empty, process-local repository for tests and local development only. */
@@ -11,6 +11,8 @@ export class MemoryRepository implements Repository {
   private auditEvents: AuditEvent[] = [];
   private outbox = new Map<string, OutboxMessage>();
   private storageLocations = new Map<string, StorageLocation>();
+  private importBatches = new Map<string, ImportBatch>();
+  private importRows = new Map<string, ImportRow>();
 
   async getDashboardSummary() {
     const activities = [...this.activities.values()];
@@ -47,6 +49,12 @@ export class MemoryRepository implements Repository {
   async listStorageLocations() { return [...this.storageLocations.values()].sort((a,b) => a.name.localeCompare(b.name,"th")).map((item) => structuredClone(item)); }
   async getStorageLocation(id: string) { const item=this.storageLocations.get(id); return item ? structuredClone(item) : undefined; }
   async saveStorageLocation(item: StorageLocation) { this.storageLocations.set(item.locationId, structuredClone(item)); }
+  async listImportBatches(){ return [...this.importBatches.values()].map((x)=>structuredClone(x)); }
+  async getImportBatch(id:string){ const x=this.importBatches.get(id); return x?structuredClone(x):undefined; }
+  async getImportBatchByChecksum(checksum:string,entityType:ImportBatch["entityType"]){ return (await this.listImportBatches()).find((x)=>x.checksum===checksum&&x.entityType===entityType&&x.status!=="VOID"); }
+  async saveImportBatch(x:ImportBatch){ this.importBatches.set(x.batchId,structuredClone(x)); }
+  async listImportRows(batchId:string){ return [...this.importRows.values()].filter((x)=>x.batchId===batchId).map((x)=>structuredClone(x)); }
+  async saveImportRow(x:ImportRow){ this.importRows.set(x.importRowId,structuredClone(x)); }
   async getFarmerByLineUserId(id: string) { const item = [...this.farmers.values()].find((value) => value.lineUserId === id); return item ? structuredClone(item) : undefined; }
   async getFarmerByMemberCode(code: string) { const item = [...this.farmers.values()].find((value) => value.memberCode.toLowerCase() === code.toLowerCase()); return item ? structuredClone(item) : undefined; }
   async listFarmers() { return [...this.farmers.values()].sort((a, b) => a.memberCode.localeCompare(b.memberCode)).map((item) => structuredClone(item)); }

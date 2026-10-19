@@ -143,9 +143,20 @@ export interface StorageLocation {
   updatedAt: string;
 }
 
+export interface ImportIssue { field?: string; code: string; message: string; }
+export interface ImportBatch {
+  batchId:string; sourceName:string; sourceType:"CSV"|"XLSX"|"OCR"|"API"; entityType:"FARMER";
+  checksum:string; status:"PREVIEW"|"READY"|"COMMITTED"|"VOID"; totalRows:number; validRows:number; errorRows:number; duplicateRows:number;
+  createdBy:string; createdAt:string; updatedAt:string;
+}
+export interface ImportRow {
+  importRowId:string; batchId:string; sourceRowNumber:number; rawData:Record<string,unknown>; normalizedData:Record<string,unknown>;
+  rowStatus:"VALID"|"ERROR"|"DUPLICATE"|"SKIPPED"|"COMMITTED"; issues:ImportIssue[]; targetEntityId?:string; createdAt:string; updatedAt:string;
+}
+
 export interface AuditEvent {
   auditId: string;
-  entityType: "ACTIVITY" | "LOT" | "FARMER" | "PLOT" | "STORAGE_LOCATION" | "REPORT" | "USER" | "RULE" | "OUTBOX";
+  entityType: "ACTIVITY" | "LOT" | "FARMER" | "PLOT" | "STORAGE_LOCATION" | "IMPORT_BATCH" | "REPORT" | "USER" | "RULE" | "OUTBOX";
   entityId: string;
   actorId: string;
   action: string;

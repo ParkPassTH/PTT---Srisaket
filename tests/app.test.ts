@@ -133,6 +133,15 @@ describe("HTTP API", () => {
     assert.equal(JSON.stringify(response.body).includes("gemini-test"), false);
   });
 
+  it("previews legacy farmer rows without changing the farmer registry",async()=>{
+    const agent=request.agent(app);await agent.post("/api/auth/login").send({email:"admin@example.com",password:"secure-test-password"});
+    const preview=await agent.post("/api/imports/preview").send({sourceName:"members.csv",rows:[{member_code:"M-NEW",full_name:"สมาชิกใหม่"},{member_code:"M-TEST",full_name:"สมาชิกซ้ำ"},{member_code:"",full_name:"ข้อมูลขาด"}]});
+    assert.equal(preview.status,201);assert.equal(preview.body.batch.validRows,1);assert.equal(preview.body.batch.duplicateRows,1);assert.equal(preview.body.batch.errorRows,1);
+    assert.equal((await agent.get("/api/farmers")).body.farmers.length,1);
+    const repeated=await agent.post("/api/imports/preview").send({sourceName:"members-copy.csv",rows:[{member_code:"M-NEW",full_name:"สมาชิกใหม่"},{member_code:"M-TEST",full_name:"สมาชิกซ้ำ"},{member_code:"",full_name:"ข้อมูลขาด"}]});
+    assert.equal(repeated.body.reused,true);assert.equal(repeated.body.batch.batchId,preview.body.batch.batchId);
+  });
+
   it("corrects extracted activity fields with before/after audit snapshots", async () => {
     const agent = request.agent(app);
     await agent.post("/api/auth/login").send({ email:"admin@example.com", password:"secure-test-password" });

@@ -54,8 +54,8 @@
 | F-033 | จับคู่แปลงอัตโนมัติจากทะเบียน | เกษตรกร/ICS | Implemented | รองรับรหัส ชื่อ “แปลง 1/แปลงหนึ่ง” และเลือกแปลงเดียวอัตโนมัติ พร้อมเติมพืชจากทะเบียน |
 | F-034 | ทะเบียนสถานที่จัดเก็บและประวัติย้ายล็อต | Warehouse/Admin | Done | เลือกสถานที่เดิมเมื่อสร้างล็อต เพิ่มสถานที่ใหม่ และย้ายพร้อมเหตุผล/snapshot ก่อน–หลัง |
 | F-035 | สำรวจแหล่งข้อมูลเดิมและ Data Contract | เจ้าหน้าที่/ผู้ดูแลข้อมูล | Planned | ยืนยันว่าเอกสารอยู่ที่ใคร รูปแบบใด เจ้าของข้อมูลและสิทธิ์ใช้งาน พร้อม sample ที่ปกปิดข้อมูล |
-| F-036 | CSV/XLSX Import Preview และ Column Mapping | เจ้าหน้าที่นำเข้า | Planned | อัปโหลดไฟล์ จับคู่คอลัมน์ ดูตัวอย่าง และยังไม่เขียนข้อมูลจนกดยืนยัน |
-| F-037 | Data Quality Check และ Error Report | เจ้าหน้าที่/ICS | Planned | ตรวจรหัสซ้ำ ช่องบังคับ วันที่ หน่วย ความสัมพันธ์เกษตรกร–แปลง–ล็อต และดาวน์โหลดรายการที่ต้องแก้ได้ |
+| F-036 | CSV/XLSX Import Preview และ Column Mapping | เจ้าหน้าที่นำเข้า | In Progress | Import Batch/staging API สำหรับตัวอย่างสมาชิกพร้อม; รอ parser, mapping UI และชนิดข้อมูลอื่น |
+| F-037 | Data Quality Check และ Error Report | เจ้าหน้าที่/ICS | In Progress | ตรวจรหัสสมาชิกซ้ำ/ว่าง/รูปแบบใน staging พร้อม; รอกฎวันที่ หน่วย ความสัมพันธ์ และไฟล์ error report |
 | F-038 | Controlled Import, Idempotency และ Rollback | Admin | Planned | dry run, import batch ID, ป้องกันนำเข้าซ้ำ, commit แบบตรวจสอบได้ และย้อน batch ได้โดยไม่ลบ audit |
 | F-039 | Provenance และสถานะตรวจทานข้อมูลเดิม | ICS/Auditor | Planned | ทุกแถวระบุแหล่งที่มา batch ผู้ตรวจ สถานะ VERIFIED/NEEDS_REVIEW และไม่อ้างว่าผ่านมาตรฐานอัตโนมัติ |
 | F-040 | Stock Movement Ledger และยอดคงเหลือ | Warehouse/ICS | Planned | รับเข้า จอง ปลดจอง จ่ายออก ปรับยอด เรียกคืน พร้อมยอดคงเหลือที่คำนวณจาก ledger และ audit |
