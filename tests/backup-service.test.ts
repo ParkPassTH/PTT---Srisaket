@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { MemoryRepository } from "../src/repositories/memory-repository.js";
 import { BackupService } from "../src/services/backup-service.js";
+import { createHash } from "node:crypto";
 
 describe("backup and merge restore", () => {
   it("exports all entities with a verifiable checksum", async () => {
@@ -36,4 +37,23 @@ describe("backup and merge restore", () => {
     assert.equal((await target.listAllReviews()).length,1);
     assert.equal((await target.listAllAuditEvents()).filter((item) => item.auditId === "AUD-1").length,1);
   });
+
+  it("backs up mapping templates and accepts archives created before that additive entity",async()=>{
+    const source=new MemoryRepository();
+    await source.saveImportMappingTemplate({templateId:"IMPMAP-1",name:"Members",sourceName:"members.csv",entityType:"FARMER",headers:["id","name"],mapping:{memberCode:"id",displayName:"name"},createdBy:"ADMIN",updatedBy:"ADMIN",createdAt:"2026-10-20T00:00:00.000Z",updatedAt:"2026-10-20T00:00:00.000Z"});
+    const service=new BackupService(source); const archive=await service.export();
+    assert.equal(archive.entities.importMappingTemplates.length,1);
+    const legacy=structuredClone(archive) as unknown as {checksum:string;entities:Record<string,unknown>;[key:string]:unknown};
+    delete legacy.entities.importMappingTemplates;
+    const {checksum:discarded,...payload}=legacy; void discarded;
+    legacy.checksum=createHash("sha256").update(JSON.stringify(canonical(payload))).digest("hex");
+    const validated=service.validate(legacy);
+    assert.equal(validated.archive.entities.importMappingTemplates.length,0);
+  });
 });
+
+function canonical(value:unknown):unknown {
+  if(Array.isArray(value)) return value.map(canonical);
+  if(value&&typeof value==="object") return Object.fromEntries(Object.entries(value).filter(([,item])=>item!==undefined).sort(([a],[b])=>a.localeCompare(b)).map(([key,item])=>[key,canonical(item)]));
+  return value;
+}

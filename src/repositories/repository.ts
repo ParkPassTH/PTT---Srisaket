@@ -1,4 +1,4 @@
-import type { Activity, AuditEvent, Farmer, ImportBatch, ImportRow, Lot, OutboxMessage, Plot, Review, StockMovement, StorageLocation } from "../domain/types.js";
+import type { Activity, AuditEvent, Farmer, ImportBatch, ImportMappingTemplate, ImportRow, Lot, OutboxMessage, Plot, Review, StockMovement, StorageLocation } from "../domain/types.js";
 
 export interface ActivityFilters {
   status?: string;
@@ -37,6 +37,9 @@ export interface Repository {
   saveImportBatch(batch: ImportBatch): Promise<void>;
   listImportRows(batchId: string): Promise<ImportRow[]>;
   saveImportRow(row: ImportRow): Promise<void>;
+  listImportMappingTemplates(): Promise<ImportMappingTemplate[]>;
+  getImportMappingTemplate(templateId: string): Promise<ImportMappingTemplate | undefined>;
+  saveImportMappingTemplate(template: ImportMappingTemplate): Promise<void>;
   getFarmerByLineUserId(lineUserId: string): Promise<Farmer | undefined>;
   getFarmerByMemberCode(memberCode: string): Promise<Farmer | undefined>;
   listFarmers(): Promise<Farmer[]>;

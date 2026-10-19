@@ -178,12 +178,21 @@ export interface ImportBatch {
 }
 export interface ImportRow {
   importRowId:string; batchId:string; sourceRowNumber:number; rawData:Record<string,unknown>; normalizedData:Record<string,unknown>;
-  rowStatus:"VALID"|"ERROR"|"DUPLICATE"|"SKIPPED"|"COMMITTED"; issues:ImportIssue[]; targetEntityId?:string; createdAt:string; updatedAt:string;
+  rowStatus:"VALID"|"ERROR"|"DUPLICATE"|"SKIPPED"|"COMMITTED"; issues:ImportIssue[]; targetEntityId?:string;
+  importedBy?:string; importedAt?:string; verificationStatus:"NOT_REQUIRED"|"PENDING"|"VERIFIED"|"REJECTED";
+  reviewerId?:string; reviewedAt?:string; reviewReason?:string; createdAt:string; updatedAt:string;
+}
+
+export type FarmerImportField = "memberCode" | "displayName" | "lineUserId" | "status" | "address" | "phone" | "registeredAt" | "totalAreaRai";
+export type FarmerImportMapping = Partial<Record<FarmerImportField, string>>;
+export interface ImportMappingTemplate {
+  templateId:string; name:string; sourceName:string; entityType:"FARMER"; headers:string[]; mapping:FarmerImportMapping;
+  createdBy:string; updatedBy:string; createdAt:string; updatedAt:string;
 }
 
 export interface AuditEvent {
   auditId: string;
-  entityType: "ACTIVITY" | "LOT" | "STOCK_MOVEMENT" | "FARMER" | "PLOT" | "STORAGE_LOCATION" | "IMPORT_BATCH" | "REPORT" | "USER" | "RULE" | "OUTBOX";
+  entityType: "ACTIVITY" | "LOT" | "STOCK_MOVEMENT" | "FARMER" | "PLOT" | "STORAGE_LOCATION" | "IMPORT_BATCH" | "IMPORT_MAPPING_TEMPLATE" | "REPORT" | "USER" | "RULE" | "OUTBOX";
   entityId: string;
   actorId: string;
   action: string;

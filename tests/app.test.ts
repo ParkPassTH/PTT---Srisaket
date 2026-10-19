@@ -142,6 +142,33 @@ describe("HTTP API", () => {
     assert.equal(repeated.body.reused,true);assert.equal(repeated.body.batch.batchId,preview.body.batch.batchId);
   });
 
+  it("commits and verifies imported rows through provenance APIs",async()=>{
+    const agent=request.agent(app);await agent.post("/api/auth/login").send({email:"admin@example.com",password:"secure-test-password"});
+    const preview=await agent.post("/api/imports/preview").send({sourceName:"review.csv",rows:[{member_code:"M-VERIFY",full_name:"สมาชิกยืนยัน"}]});
+    const committed=await agent.post(`/api/imports/${preview.body.batch.batchId}/commit`).send({reason:"ตรวจสอบไฟล์ต้นทางแล้ว"});
+    assert.equal(committed.status,200);assert.equal(committed.body.rows[0].verificationStatus,"PENDING");
+    const listed=await agent.get("/api/imports?verificationStatus=PENDING");
+    assert.equal(listed.status,200);assert.equal(listed.body.batches[0].verification.pending,1);
+    const rowId=committed.body.rows[0].importRowId;
+    const verified=await agent.post(`/api/imports/${preview.body.batch.batchId}/rows/${rowId}/verify`).send({reason:"เทียบกับเอกสารต้นฉบับแล้ว"});
+    assert.equal(verified.status,200);assert.equal(verified.body.row.verificationStatus,"VERIFIED");
+    const rejected=await agent.post(`/api/imports/${preview.body.batch.batchId}/rows/${rowId}/reject`).send({reason:"พบเอกสารฉบับใหม่ที่ไม่ตรงกัน"});
+    assert.equal(rejected.status,200);assert.equal(rejected.body.row.verificationStatus,"REJECTED");
+  });
+
+  it("creates, lists and updates reusable import mapping templates",async()=>{
+    const agent=request.agent(app); await agent.post("/api/auth/login").send({email:"admin@example.com",password:"secure-test-password"});
+    const input={name:"Community members",sourceName:"members.csv",entityType:"FARMER",headers:["member_id","full_name"],mapping:{memberCode:"member_id",displayName:"full_name"}};
+    const created=await agent.post("/api/import-mapping-templates").send(input);
+    assert.equal(created.status,201); assert.equal(created.body.template.updatedBy,"admin-local");
+    const listed=await agent.get("/api/import-mapping-templates");
+    assert.equal(listed.status,200); assert.equal(listed.body.templates.length,1);
+    const updated=await agent.patch(`/api/import-mapping-templates/${created.body.template.templateId}`).send({name:"Community members v2"});
+    assert.equal(updated.status,200); assert.equal(updated.body.template.name,"Community members v2");
+    const invalid=await agent.post("/api/import-mapping-templates").send({...input,name:"Invalid",mapping:{memberCode:"missing",displayName:"full_name"}});
+    assert.equal(invalid.status,400); assert.equal(invalid.body.error.code,"IMPORT_TEMPLATE_HEADER_NOT_FOUND");
+  });
+
   it("corrects extracted activity fields with before/after audit snapshots", async () => {
     const agent = request.agent(app);
     await agent.post("/api/auth/login").send({ email:"admin@example.com", password:"secure-test-password" });

@@ -50,6 +50,39 @@ describe("ImportService", () => {
     assert.equal((await repository.listFarmers()).length, 1);
   });
 
+  it("records importer provenance and review decisions with audit snapshots", async () => {
+    const repository = new MemoryRepository();
+    const service = new ImportService(repository);
+    const preview = await service.preview({ sourceName:"members.csv", rows:[{member_code:"M-REVIEW",full_name:"สมาชิกตรวจสอบ"}] }, "importer-1");
+    const committed = await service.commit(preview.batch.batchId, "importer-1", "ตรวจไฟล์ต้นทางแล้ว");
+    const committedRow = committed.rows[0]!;
+    assert.equal(committedRow.importedBy, "importer-1");
+    assert.ok(committedRow.importedAt);
+    assert.equal(committedRow.verificationStatus, "PENDING");
+
+    const verified = await service.reviewRow(preview.batch.batchId, committedRow.importRowId, "VERIFIED", "reviewer-1", "เทียบเอกสารต้นฉบับแล้ว");
+    assert.equal(verified.row.verificationStatus, "VERIFIED");
+    assert.equal(verified.row.reviewerId, "reviewer-1");
+    assert.ok(verified.row.reviewedAt);
+    assert.equal((await service.reviewRow(preview.batch.batchId, committedRow.importRowId, "VERIFIED", "reviewer-1", "ตรวจซ้ำเพื่อยืนยัน")).reused, true);
+
+    const rejected = await service.reviewRow(preview.batch.batchId, committedRow.importRowId, "REJECTED", "reviewer-2", "ข้อมูลไม่ตรงเอกสารฉบับจริง");
+    assert.equal(rejected.row.verificationStatus, "REJECTED");
+    const audits = (await repository.listAuditEvents(preview.batch.batchId)).filter((event)=>event.action.startsWith("IMPORT_ROW_"));
+    assert.equal(audits.length, 2);
+    assert.equal((audits[1]?.before as {verificationStatus:string}).verificationStatus, "VERIFIED");
+    assert.equal((audits[1]?.after as {verificationStatus:string}).verificationStatus, "REJECTED");
+    assert.equal((await service.listBatches({verificationStatus:"REJECTED"})).batches[0]?.verification.rejected, 1);
+  });
+
+  it("rejects verification before commit or for an unknown row", async () => {
+    const service = new ImportService(new MemoryRepository());
+    const preview = await service.preview({ sourceName:"members.csv", rows:[{member_code:"M-PENDING",full_name:"สมาชิกรอตรวจ"}] }, "admin");
+    await assert.rejects(() => service.reviewRow(preview.batch.batchId, preview.rows[0]!.importRowId, "VERIFIED", "reviewer", "ยังไม่ได้นำเข้า"), (error:unknown)=>error instanceof HttpError && error.code === "IMPORT_NOT_COMMITTED");
+    await service.commit(preview.batch.batchId, "admin", "ตรวจไฟล์พร้อมนำเข้าแล้ว");
+    await assert.rejects(() => service.reviewRow(preview.batch.batchId, "IMR-MISSING", "VERIFIED", "reviewer", "ไม่พบแถวข้อมูล"), (error:unknown)=>error instanceof HttpError && error.code === "IMPORT_ROW_NOT_FOUND");
+  });
+
   it("voids only uncommitted batches", async () => {
     const repository = new MemoryRepository();
     const service = new ImportService(repository);

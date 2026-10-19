@@ -1,4 +1,4 @@
-const state = { user: null, dashboard: null, activities: [], farmers: [], plots: [], lots: [], storageLocations: [], selectedActivity: null, drawerInvoker: null, currentView: "overview", formMode: null, backupArchive: null, importFile: null, importParsed: null, importPreview: null };
+const state = { user: null, dashboard: null, activities: [], farmers: [], plots: [], lots: [], lotStock: {}, storageLocations: [], selectedActivity: null, drawerInvoker: null, currentView: "overview", formMode: null, backupArchive: null, importFile: null, importParsed: null, importPreview: null };
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -151,13 +151,53 @@ async function showView(view) {
 }
 
 async function loadLots() {
+  $("#lot-count").textContent = "กำลังโหลดล็อตและยอดคงเหลือ...";
+  $("#lot-list").innerHTML = `<div class="loading-state stock-loading" role="status"><span class="spinner"></span> กำลังตรวจยอดสินค้าและประวัติการเคลื่อนไหว...</div>`;
   try {
     const [{ lots }, { activities }, { locations }] = await Promise.all([api("/api/lots"), api("/api/activities"), api("/api/storage-locations")]);
     state.lots = lots;
     state.activities = activities;
     state.storageLocations = locations;
+    state.lotStock = Object.fromEntries(await Promise.all(lots.map(async (lot) => {
+      try { return [lot.lotId, { status:"ready", ...(await api(`/api/lots/${encodeURIComponent(lot.lotId)}/stock`)) }]; }
+      catch (error) { return [lot.lotId, { status:"error", error:error.message }]; }
+    })));
     renderLots();
-  } catch (error) { showToast(error.message); }
+  } catch (error) {
+    $("#lot-count").textContent = "โหลดข้อมูลไม่สำเร็จ";
+    $("#lot-list").innerHTML = `<div class="empty-state"><strong>เปิดทะเบียนล็อตไม่ได้</strong><p>${escapeHtml(error.message)}</p><button type="button" class="button secondary-button" data-retry-lots>ลองโหลดอีกครั้ง</button></div>`;
+  }
+}
+
+const stockMovementMeta = {
+  RECEIVE:["รับเข้า", "+"], RESERVE:["จองสินค้า", "−"], RELEASE:["ปลดจอง", "+"], SHIP:["จ่ายออก", "−"], ADJUST:["ปรับยอด", ""], RECALL:["เรียกคืน", ""]
+};
+
+function formatQuantity(value, unit) {
+  return `${new Intl.NumberFormat("th-TH", { maximumFractionDigits:6 }).format(value)} ${unit}`;
+}
+
+function renderStockPanel(lot) {
+  const stock = state.lotStock[lot.lotId];
+  if (!stock || stock.status === "loading") return `<section class="stock-panel" aria-label="ยอดสินค้า ${escapeHtml(lot.lotId)}"><div class="loading-state"><span class="spinner"></span> กำลังโหลดยอดสินค้า...</div></section>`;
+  if (stock.status === "error") return `<section class="stock-panel stock-error" aria-label="ยอดสินค้า ${escapeHtml(lot.lotId)}"><strong>อ่านยอดสินค้าไม่ได้</strong><p>${escapeHtml(stock.error)}</p><button type="button" class="text-button" data-retry-stock="${escapeHtml(lot.lotId)}">ลองใหม่</button></section>`;
+  const { balance, movements } = stock;
+  const actions = ["RESERVE","RELEASE","SHIP","ADJUST","RECALL"];
+  return `<section class="stock-panel" aria-label="ยอดสินค้า ${escapeHtml(lot.lotId)}">
+    <div class="stock-balance">
+      <div><span>คงเหลือจริง</span><strong>${escapeHtml(formatQuantity(balance.onHand, balance.unit))}</strong></div>
+      <div><span>ยอดจอง</span><strong>${escapeHtml(formatQuantity(balance.reserved, balance.unit))}</strong></div>
+      <div><span>พร้อมใช้</span><strong>${escapeHtml(formatQuantity(balance.available, balance.unit))}</strong></div>
+      <small>${balance.updatedAt ? `อัปเดต ${escapeHtml(formatDateTime(balance.updatedAt))}` : "ยังไม่มีรายการเคลื่อนไหว"}</small>
+    </div>
+    <div class="stock-actions" aria-label="บันทึกการเคลื่อนไหวสินค้า">
+      ${actions.map((type) => `<button type="button" class="button ${type === "RECALL" ? "stock-critical-action" : "secondary-button"}" data-stock-action="${type}" data-lot-id="${escapeHtml(lot.lotId)}" ${((balance.recalled && type !== "RELEASE") || (type === "RESERVE" && balance.available <= 0) || (type === "RELEASE" && balance.reserved <= 0) || (type === "SHIP" && balance.onHand <= 0)) ? "disabled" : ""}>${stockMovementMeta[type][0]}</button>`).join("")}
+    </div>
+    ${balance.recalled ? `<p class="stock-notice" role="status">ล็อตนี้ถูกเรียกคืนแล้ว ยอดพร้อมใช้จึงเป็นศูนย์ อนุญาตเฉพาะการปลดจองที่ยังค้าง</p>` : ""}
+    <details class="stock-history"><summary>ประวัติการเคลื่อนไหว <span>${movements.length} รายการ</span></summary>
+      <div class="stock-history-list">${[...movements].reverse().map((item) => `<article><div><strong>${escapeHtml(stockMovementMeta[item.movementType]?.[0] || item.movementType)}</strong><small>${escapeHtml(formatDateTime(item.occurredAt))} · ${escapeHtml(item.actorId)}</small></div><div class="stock-movement-quantity"><strong>${escapeHtml(`${stockMovementMeta[item.movementType]?.[1] || ""}${formatQuantity(item.quantity, item.unit)}`)}</strong><small>${escapeHtml(item.reason)}</small></div></article>`).join("") || `<div class="empty-state compact"><strong>ยังไม่มีประวัติ</strong><p>รายการรับเข้าจะปรากฏหลังสร้างล็อตสำเร็จ</p></div>`}</div>
+    </details>
+  </section>`;
 }
 
 function renderLots() {
@@ -165,7 +205,7 @@ function renderLots() {
   $("#lot-count").textContent = `${state.lots.length} ล็อต`;
   $("#storage-count").textContent = `${state.storageLocations.length} แห่ง`;
   $("#storage-list").innerHTML = state.storageLocations.map((item) => `<article class="farmer-card"><div class="farmer-main"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml([item.locationType,item.zone,item.address].filter(Boolean).join(" · ") || "ไม่ระบุรายละเอียด")}</small></div><span class="status ${item.status === "ACTIVE" ? "status-clear" : "status-info"}">${item.status === "ACTIVE" ? "ใช้งาน" : "พักใช้งาน"}</span></div></article>`).join("") || `<div class="empty-state"><strong>ยังไม่มีสถานที่จัดเก็บ</strong><p>เพิ่มสถานที่ก่อนสร้างล็อตแรก</p></div>`;
-  $("#lot-list").innerHTML = state.lots.map((lot) => `<article class="lot-card"><div><span class="member-code">${escapeHtml(lot.lotId)}</span><h3>${escapeHtml(lot.crop)}</h3><p>${escapeHtml(lot.farmerName)} · ${escapeHtml(lot.plotName)} · ${escapeHtml(lot.quantity)} ${escapeHtml(lot.unit)}</p><small>จัดเก็บ: ${escapeHtml(lot.storageLocationName || "ยังไม่ระบุ")} · เก็บเกี่ยว ${new Intl.DateTimeFormat("th-TH", { dateStyle:"medium" }).format(new Date(lot.harvestDate))}</small></div><div class="lot-actions"><span class="status ${["VOID","RECALLED"].includes(lot.inventoryStatus) ? "status-critical" : "status-clear"}">${statusLabel[lot.inventoryStatus]}</span><button class="text-button" data-move-storage="${escapeHtml(lot.lotId)}">เปลี่ยนที่จัดเก็บ</button><a class="text-button" href="/trace/${encodeURIComponent(lot.traceToken)}" target="_blank" rel="noopener">เปิดหน้าตรวจสอบ</a><a class="text-button" href="/api/lots/${encodeURIComponent(lot.lotId)}/qr.png">ดาวน์โหลด QR</a>${["VOID","RECALLED"].includes(lot.inventoryStatus) ? "" : `<select data-lot-status="${escapeHtml(lot.lotId)}" aria-label="เปลี่ยนสถานะ ${escapeHtml(lot.lotId)}"><option value="">เปลี่ยนสถานะ...</option>${lot.inventoryStatus !== "SHIPPED" ? '<option value="SHIPPED">ส่งสินค้าแล้ว</option>' : ""}<option value="RECALLED">เรียกคืน</option><option value="VOID">ยกเลิก</option></select>`}</div></article>`).join("") || `<div class="empty-state"><strong>ยังไม่มีล็อต</strong><p>ล็อตแรกสร้างได้จากรายการเก็บเกี่ยวที่อนุมัติและมีข้อมูลครบ</p></div>`;
+  $("#lot-list").innerHTML = state.lots.map((lot) => `<article class="lot-card"><div class="lot-summary"><div><span class="member-code">${escapeHtml(lot.lotId)}</span><h3>${escapeHtml(lot.crop)}</h3><p>${escapeHtml(lot.farmerName)} · ${escapeHtml(lot.plotName)} · ตั้งต้น ${escapeHtml(formatQuantity(lot.quantity, lot.unit))}</p><small>จัดเก็บ: ${escapeHtml(lot.storageLocationName || "ยังไม่ระบุ")} · เก็บเกี่ยว ${new Intl.DateTimeFormat("th-TH", { dateStyle:"medium" }).format(new Date(lot.harvestDate))}</small></div><div class="lot-actions"><span class="status ${["VOID","RECALLED"].includes(lot.inventoryStatus) ? "status-critical" : "status-clear"}">${statusLabel[lot.inventoryStatus]}</span><button class="text-button" data-move-storage="${escapeHtml(lot.lotId)}">เปลี่ยนที่จัดเก็บ</button><a class="text-button" href="/trace/${encodeURIComponent(lot.traceToken)}" target="_blank" rel="noopener">เปิดหน้าตรวจสอบ</a><a class="text-button" href="/api/lots/${encodeURIComponent(lot.lotId)}/qr.png">ดาวน์โหลด QR</a></div></div>${renderStockPanel(lot)}</article>`).join("") || `<div class="empty-state"><strong>ยังไม่มีล็อต</strong><p>ล็อตแรกสร้างได้จากรายการเก็บเกี่ยวที่อนุมัติและมีข้อมูลครบ</p></div>`;
   const harvests = state.activities.filter((x) => x.activityType?.trim().toLocaleLowerCase("th-TH").includes("เก็บเกี่ยว") && x.riskStatus === "APPROVED" && x.harvestAmount && x.harvestUnit && x.crop && x.plotName && !x.createdLotId);
   $("#harvest-list").innerHTML = harvests.map((item) => `<article class="farmer-card"><div class="farmer-main"><span class="farmer-mark">${escapeHtml(initials(item.farmerName))}</span><div><strong>${escapeHtml(item.farmerName)} · ${escapeHtml(item.crop)}</strong><small>${escapeHtml(item.plotName)} · ${escapeHtml(item.harvestAmount)} ${escapeHtml(item.harvestUnit)}</small></div><button class="button secondary-button" data-create-lot="${escapeHtml(item.activityId)}">สร้างล็อต</button></div></article>`).join("") || `<div class="empty-state"><strong>ยังไม่มีกิจกรรมที่พร้อมสร้างล็อต</strong><p>ตรวจและอนุมัติกิจกรรมเก็บเกี่ยวที่มีพืช แปลง ปริมาณ และหน่วยครบก่อน</p></div>`;
 }
@@ -329,17 +369,18 @@ function openEntityDialog(mode, farmerId, extra = {}) {
   state.formMode = { mode, farmerId, ...extra };
   const isFarmer = mode === "farmer";
   const isLotStatus = mode === "lot-status";
-  const isStorage = mode === "storage"; const isCreateLot=mode === "create-lot"; const isMoveStorage=mode === "move-storage";
-  $("#entity-dialog-title").textContent = isFarmer ? "เพิ่มเกษตรกร" : isLotStatus ? "ยืนยันการเปลี่ยนสถานะล็อต" : isStorage ? "เพิ่มสถานที่จัดเก็บ" : isCreateLot ? "เลือกสถานที่จัดเก็บ" : isMoveStorage ? "ย้ายสถานที่จัดเก็บ" : "เพิ่มแปลง";
+  const isStorage = mode === "storage"; const isCreateLot=mode === "create-lot"; const isMoveStorage=mode === "move-storage"; const isStockMovement=mode === "stock-movement";
+  $("#entity-dialog-title").textContent = isFarmer ? "เพิ่มเกษตรกร" : isLotStatus ? "ยืนยันการเปลี่ยนสถานะล็อต" : isStorage ? "เพิ่มสถานที่จัดเก็บ" : isCreateLot ? "เลือกสถานที่จัดเก็บ" : isMoveStorage ? "ย้ายสถานที่จัดเก็บ" : isStockMovement ? `${stockMovementMeta[extra.type]?.[0] || "บันทึกยอด"} · ${extra.lotId}` : "เพิ่มแปลง";
   $("#entity-form-error").hidden = true;
   $("#entity-form-fields").innerHTML = isFarmer
     ? `<label>รหัสสมาชิก<input name="memberCode" required minlength="2" maxlength="30" placeholder="เช่น M001" pattern="[A-Za-z0-9_-]+"><small>ใช้รหัสนี้สำหรับคำสั่งลงทะเบียนใน LINE</small></label><label>ชื่อเกษตรกร<input name="displayName" required minlength="2" maxlength="120" placeholder="ชื่อและนามสกุล"></label>`
     : isLotStatus ? `<p>เปลี่ยนสถานะล็อตเป็น <strong>${escapeHtml(extra.statusLabel || extra.status)}</strong></p><label>เหตุผล<textarea name="reason" required minlength="5" maxlength="500" placeholder="ระบุเหตุผลอย่างน้อย 5 ตัวอักษร"></textarea></label>`
     : isStorage ? `<label>ชื่อสถานที่<input name="name" required minlength="2" maxlength="120" placeholder="เช่น คลังกลางศรีสะเกษ"></label><label>ประเภท<input name="locationType" maxlength="80" placeholder="เช่น โกดัง หรือห้องเย็น"></label><label>โซน<input name="zone" maxlength="80" placeholder="เช่น อาคาร A ชั้น 1"></label><label>ที่อยู่<textarea name="address" maxlength="300"></textarea></label>`
     : (isCreateLot || isMoveStorage) ? `<label>สถานที่จัดเก็บ<select name="storageLocationId" required><option value="">เลือกสถานที่...</option>${state.storageLocations.filter((x)=>x.status==="ACTIVE").map((x)=>`<option value="${escapeHtml(x.locationId)}">${escapeHtml(x.name)}</option>`).join("")}</select></label>${isMoveStorage ? '<label>เหตุผลในการย้าย<textarea name="reason" required minlength="5" maxlength="500"></textarea></label>' : ''}`
+    : isStockMovement ? `${extra.type === "RECALL" ? `<p class="stock-dialog-warning">การเรียกคืนจะทำให้ยอดพร้อมใช้เป็นศูนย์ทันที แต่ยังเก็บยอดคงเหลือจริงไว้เพื่อตรวจสอบย้อนหลัง</p><input type="hidden" name="quantity" value="1">` : `<label>ปริมาณ (${escapeHtml(extra.unit)})<input name="quantity" type="number" ${extra.type === "ADJUST" ? "" : `min="0.000001" max="${escapeHtml(extra.maximum)}"`} step="any" required inputmode="decimal" aria-describedby="stock-quantity-hint"><small id="stock-quantity-hint">${extra.type === "ADJUST" ? "กรอกค่าบวกเพื่อเพิ่ม หรือค่าลบเพื่อลดยอด" : `กรอกได้ไม่เกิน ${escapeHtml(formatQuantity(extra.maximum, extra.unit))}`}</small></label>`}<label>เหตุผล<textarea name="reason" required minlength="5" maxlength="500" placeholder="ระบุที่มา เลขเอกสาร หรือเหตุผลอย่างน้อย 5 ตัวอักษร"></textarea></label>`
     : `<label>ชื่อแปลง<input name="name" required maxlength="120" placeholder="เช่น แปลงเหนือ"></label><label>พืชหลัก<input name="crop" required maxlength="120" placeholder="เช่น หอมแดง"></label>`;
   $("#entity-dialog").showModal();
-  $("#entity-form-fields input").focus();
+  $("#entity-form-fields input:not([type=hidden]), #entity-form-fields select, #entity-form-fields textarea").focus();
 }
 
 function renderActivityTable(activities) {
@@ -462,7 +503,27 @@ document.addEventListener("click", (event) => {
   if (lotTrigger) createLot(lotTrigger.dataset.createLot, lotTrigger);
   const moveTrigger=event.target.closest("[data-move-storage]");
   if(moveTrigger) openEntityDialog("move-storage",undefined,{lotId:moveTrigger.dataset.moveStorage});
+  const retryLots=event.target.closest("[data-retry-lots]");
+  if(retryLots) loadLots();
+  const retryStock=event.target.closest("[data-retry-stock]");
+  if(retryStock) loadLotStock(retryStock.dataset.retryStock, retryStock);
+  const stockTrigger=event.target.closest("[data-stock-action]");
+  if(stockTrigger) {
+    const lot=state.lots.find((item)=>item.lotId===stockTrigger.dataset.lotId);
+    const balance=state.lotStock[stockTrigger.dataset.lotId]?.balance;
+    if(!lot || !balance) return;
+    const type=stockTrigger.dataset.stockAction;
+    const maximum=type==="RESERVE"?balance.available:type==="RELEASE"?balance.reserved:balance.onHand;
+    openEntityDialog("stock-movement",undefined,{lotId:lot.lotId,type,unit:lot.unit,maximum,reference:`dashboard:${lot.lotId}:${type}:${Date.now()}:${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`});
+  }
 });
+async function loadLotStock(lotId, button) {
+  if (button) button.disabled=true;
+  state.lotStock[lotId]={status:"loading"}; renderLots();
+  try { state.lotStock[lotId]={status:"ready",...(await api(`/api/lots/${encodeURIComponent(lotId)}/stock`))}; }
+  catch(error) { state.lotStock[lotId]={status:"error",error:error.message}; }
+  renderLots();
+}
 async function createLot(activityId, button) {
   if(!state.storageLocations.some((item)=>item.status==="ACTIVE")){ showToast("กรุณาเพิ่มสถานที่จัดเก็บก่อนสร้างล็อต"); return; }
   openEntityDialog("create-lot",undefined,{activityId});
@@ -491,13 +552,15 @@ $("#entity-form").addEventListener("submit", async (event) => {
     const values = Object.fromEntries(new FormData(event.currentTarget));
     const isFarmer = state.formMode.mode === "farmer";
     const isLotStatus = state.formMode.mode === "lot-status";
-    const isStorage=state.formMode.mode === "storage"; const isCreateLot=state.formMode.mode === "create-lot"; const isMoveStorage=state.formMode.mode === "move-storage";
-    const body = isFarmer ? values : isLotStatus ? { reason:values.reason, status:state.formMode.status } : isCreateLot ? {activityId:state.formMode.activityId,storageLocationId:values.storageLocationId} : isMoveStorage ? {storageLocationId:values.storageLocationId,reason:values.reason} : isStorage ? values : { ...values, farmerId: state.formMode.farmerId };
-    const path=isFarmer?"/api/farmers":isLotStatus?`/api/lots/${encodeURIComponent(state.formMode.lotId)}/status`:isStorage?"/api/storage-locations":isCreateLot?"/api/lots":isMoveStorage?`/api/lots/${encodeURIComponent(state.formMode.lotId)}/storage`:"/api/plots";
+    const isStorage=state.formMode.mode === "storage"; const isCreateLot=state.formMode.mode === "create-lot"; const isMoveStorage=state.formMode.mode === "move-storage"; const isStockMovement=state.formMode.mode === "stock-movement";
+    const stockQuantity=Number(values.quantity);
+    if(isStockMovement && (!Number.isFinite(stockQuantity) || stockQuantity===0 || (state.formMode.type!=="ADJUST" && stockQuantity<0))) throw new Error(state.formMode.type === "ADJUST" ? "ปริมาณปรับยอดต้องไม่เป็นศูนย์" : "ปริมาณต้องมากกว่า 0");
+    const body = isFarmer ? values : isLotStatus ? { reason:values.reason, status:state.formMode.status } : isCreateLot ? {activityId:state.formMode.activityId,storageLocationId:values.storageLocationId} : isMoveStorage ? {storageLocationId:values.storageLocationId,reason:values.reason} : isStockMovement ? {type:state.formMode.type,quantity:stockQuantity,unit:state.formMode.unit,reason:values.reason,reference:state.formMode.reference} : isStorage ? values : { ...values, farmerId: state.formMode.farmerId };
+    const path=isFarmer?"/api/farmers":isLotStatus?`/api/lots/${encodeURIComponent(state.formMode.lotId)}/status`:isStorage?"/api/storage-locations":isCreateLot?"/api/lots":isMoveStorage?`/api/lots/${encodeURIComponent(state.formMode.lotId)}/storage`:isStockMovement?`/api/lots/${encodeURIComponent(state.formMode.lotId)}/stock-movements`:"/api/plots";
     await api(path, { method:(isLotStatus||isMoveStorage) ? "PATCH" : "POST", body:JSON.stringify(body) });
     $("#entity-dialog").close();
-    showToast(isFarmer ? "เพิ่มเกษตรกรแล้ว" : isLotStatus ? "อัปเดตสถานะล็อตแล้ว" : isStorage ? "เพิ่มสถานที่จัดเก็บแล้ว" : isCreateLot ? "สร้างล็อตและบันทึกสถานที่แล้ว" : isMoveStorage ? "ย้ายสถานที่จัดเก็บแล้ว" : "เพิ่มแปลงแล้ว");
-    if (isLotStatus||isStorage||isCreateLot||isMoveStorage) await loadLots(); else await loadFarmers();
+    showToast(isFarmer ? "เพิ่มเกษตรกรแล้ว" : isLotStatus ? "อัปเดตสถานะล็อตแล้ว" : isStorage ? "เพิ่มสถานที่จัดเก็บแล้ว" : isCreateLot ? "สร้างล็อตและบันทึกสถานที่แล้ว" : isMoveStorage ? "ย้ายสถานที่จัดเก็บแล้ว" : isStockMovement ? "บันทึกการเคลื่อนไหวและ Snapshot แล้ว" : "เพิ่มแปลงแล้ว");
+    if (isLotStatus||isStorage||isCreateLot||isMoveStorage) await loadLots(); else if(isStockMovement) await loadLotStock(state.formMode.lotId); else await loadFarmers();
   } catch (error) { errorElement.textContent = error.message; errorElement.hidden = false; }
   finally { submitButton.disabled = false; }
 });

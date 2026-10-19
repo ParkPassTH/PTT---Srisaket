@@ -32,6 +32,7 @@ This document makes the MVP inspectable and portable. Google Sheets is the curre
 | `Outbox` | `message_id` | optional related entity | Durable LINE delivery |
 | `ImportBatches` | `batch_id` | owns staged import rows | Controlled import preview/commit lifecycle |
 | `ImportRows` | `import_row_id` | `batch_id → ImportBatches` | Row-level source, normalization and issues |
+| `ImportMappingTemplates` | `template_id` | reusable per source/entity | Saved source headers and canonical field mappings |
 | `StockMovements` | `movement_id` | `lot_id → Lots`; `(lot_id, reference)` idempotency | Append-only inventory ledger |
 
 Canonical column names are defined by `TABLES` in `src/repositories/google-sheets-repository.ts`; the adapter appends missing headers without moving or deleting existing columns.
@@ -70,8 +71,15 @@ Unique constraint: `(checksum, entity_type)` for non-VOID batches. Re-uploading 
 | `issues` | JSON array | `{field, code, message}` |
 | `target_entity_id` | string nullable | Filled after commit |
 | `created_at`, `updated_at` | timestamp | UTC |
+| `imported_by`, `imported_at` | actor/timestamp nullable | Filled when committed |
+| `verification_status` | enum | `NOT_REQUIRED`, `PENDING`, `VERIFIED`, `REJECTED` |
+| `reviewer_id`, `reviewed_at`, `review_reason` | nullable review metadata | Human verification evidence |
 
 Import rows are staging records. Preview never writes Farmers, Plots, Activities, or Lots.
+
+### ImportMappingTemplate
+
+Stores a reusable template name, source label, entity type, approved source headers, canonical mapping JSON, creator/updater and timestamps. Mapping mutations are audited; `memberCode` and `displayName` remain mandatory for FARMER templates.
 
 ## 5. Inventory entities
 

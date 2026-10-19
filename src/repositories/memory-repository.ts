@@ -1,4 +1,4 @@
-import type { Activity, AuditEvent, Farmer, ImportBatch, ImportRow, Lot, OutboxMessage, Plot, Review, StockMovement, StorageLocation } from "../domain/types.js";
+import type { Activity, AuditEvent, Farmer, ImportBatch, ImportMappingTemplate, ImportRow, Lot, OutboxMessage, Plot, Review, StockMovement, StorageLocation } from "../domain/types.js";
 import type { ActivityFilters, Repository } from "./repository.js";
 
 /** Empty, process-local repository for tests and local development only. */
@@ -13,6 +13,7 @@ export class MemoryRepository implements Repository {
   private storageLocations = new Map<string, StorageLocation>();
   private importBatches = new Map<string, ImportBatch>();
   private importRows = new Map<string, ImportRow>();
+  private importMappingTemplates = new Map<string, ImportMappingTemplate>();
   private stockMovements: StockMovement[] = [];
 
   async getDashboardSummary() {
@@ -62,7 +63,10 @@ export class MemoryRepository implements Repository {
   async getImportBatchByChecksum(checksum:string,entityType:ImportBatch["entityType"]){ return (await this.listImportBatches()).find((x)=>x.checksum===checksum&&x.entityType===entityType&&x.status!=="VOID"); }
   async saveImportBatch(x:ImportBatch){ this.importBatches.set(x.batchId,structuredClone(x)); }
   async listImportRows(batchId:string){ return [...this.importRows.values()].filter((x)=>x.batchId===batchId).map((x)=>structuredClone(x)); }
-  async saveImportRow(x:ImportRow){ this.importRows.set(x.importRowId,structuredClone(x)); }
+  async saveImportRow(x:ImportRow){ this.importRows.set(x.importRowId,structuredClone({ ...x, verificationStatus:x.verificationStatus ?? "NOT_REQUIRED" })); }
+  async listImportMappingTemplates(){ return [...this.importMappingTemplates.values()].sort((a,b)=>a.name.localeCompare(b.name,"th")).map((x)=>structuredClone(x)); }
+  async getImportMappingTemplate(id:string){ const x=this.importMappingTemplates.get(id); return x?structuredClone(x):undefined; }
+  async saveImportMappingTemplate(x:ImportMappingTemplate){ this.importMappingTemplates.set(x.templateId,structuredClone(x)); }
   async getFarmerByLineUserId(id: string) { const item = [...this.farmers.values()].find((value) => value.lineUserId === id); return item ? structuredClone(item) : undefined; }
   async getFarmerByMemberCode(code: string) { const item = [...this.farmers.values()].find((value) => value.memberCode.toLowerCase() === code.toLowerCase()); return item ? structuredClone(item) : undefined; }
   async listFarmers() { return [...this.farmers.values()].sort((a, b) => a.memberCode.localeCompare(b.memberCode)).map((item) => structuredClone(item)); }

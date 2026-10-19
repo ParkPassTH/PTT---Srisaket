@@ -1,6 +1,6 @@
 import { google, sheets_v4 } from "googleapis";
 import type { AppConfig } from "../config.js";
-import type { Activity, AuditEvent, Farmer, ImportBatch, ImportRow, Lot, OutboxMessage, Plot, Review, StockMovement, StorageLocation } from "../domain/types.js";
+import type { Activity, AuditEvent, Farmer, ImportBatch, ImportMappingTemplate, ImportRow, Lot, OutboxMessage, Plot, Review, StockMovement, StorageLocation } from "../domain/types.js";
 import type { ActivityFilters, Repository } from "./repository.js";
 
 const TABLES = {
@@ -12,7 +12,8 @@ const TABLES = {
   StockMovements: ["movement_id", "lot_id", "movement_type", "quantity", "unit", "actor_id", "reason", "reference", "occurred_at"],
   StorageLocations: ["location_id", "name", "location_type", "address", "zone", "status", "created_at", "updated_at"],
   ImportBatches: ["batch_id","source_name","source_type","entity_type","checksum","status","total_rows","valid_rows","error_rows","duplicate_rows","created_by","created_at","updated_at"],
-  ImportRows: ["import_row_id","batch_id","source_row_number","raw_data","normalized_data","row_status","issues","target_entity_id","created_at","updated_at"],
+  ImportRows: ["import_row_id","batch_id","source_row_number","raw_data","normalized_data","row_status","issues","target_entity_id","imported_by","imported_at","verification_status","reviewer_id","reviewed_at","review_reason","created_at","updated_at"],
+  ImportMappingTemplates: ["template_id","name","source_name","entity_type","headers","mapping","created_by","updated_by","created_at","updated_at"],
   AuditEvents: ["audit_id", "entity_type", "entity_id", "actor_id", "action", "reason", "before", "after", "occurred_at"],
   Outbox: ["message_id", "channel", "recipient", "body", "line_message", "related_entity_id", "status", "attempts", "max_attempts", "next_attempt_at", "last_error", "created_at", "updated_at"]
 } as const;
@@ -127,6 +128,9 @@ export class GoogleSheetsRepository implements Repository {
   async saveImportBatch(x:ImportBatch){ await this.upsert("ImportBatches","batch_id",x.batchId,mapKeys(x)); }
   async listImportRows(batchId:string){ return (await this.rows("ImportRows")).map(importRowFromRow).filter((x)=>x.batchId===batchId); }
   async saveImportRow(x:ImportRow){ await this.upsert("ImportRows","import_row_id",x.importRowId,mapKeys(x)); }
+  async listImportMappingTemplates(){ return (await this.rows("ImportMappingTemplates")).map(importMappingTemplateFromRow).sort((a,b)=>a.name.localeCompare(b.name,"th")); }
+  async getImportMappingTemplate(id:string){ return (await this.listImportMappingTemplates()).find((x)=>x.templateId===id); }
+  async saveImportMappingTemplate(x:ImportMappingTemplate){ await this.upsert("ImportMappingTemplates","template_id",x.templateId,mapKeys(x)); }
   async getFarmerByLineUserId(id: string) { return (await this.rows("Farmers")).map(farmerFromRow).find((x) => x.lineUserId === id && x.status === "ACTIVE"); }
   async getFarmerByMemberCode(code: string) { return (await this.rows("Farmers")).map(farmerFromRow).find((x) => x.memberCode.toLowerCase() === code.toLowerCase() && x.status === "ACTIVE"); }
   async listFarmers() { return (await this.rows("Farmers")).map(farmerFromRow).sort((a, b) => a.memberCode.localeCompare(b.memberCode)); }
@@ -159,6 +163,8 @@ function lotFromRow(r: Row): Lot { return { lotId:r.lot_id!,activityId:r.activit
 function stockMovementFromRow(r:Row):StockMovement{return{movementId:r.movement_id!,lotId:r.lot_id!,movementType:r.movement_type as StockMovement["movementType"],quantity:Number(r.quantity),unit:r.unit!,actorId:r.actor_id!,reason:r.reason!,reference:r.reference!,occurredAt:r.occurred_at!};}
 function storageLocationFromRow(r: Row): StorageLocation { return { locationId:r.location_id!,name:r.name!,...(r.location_type?{locationType:r.location_type}:{}),...(r.address?{address:r.address}:{}),...(r.zone?{zone:r.zone}:{}),status:r.status === "INACTIVE" ? "INACTIVE" : "ACTIVE",createdAt:r.created_at!,updatedAt:r.updated_at! }; }
 function importBatchFromRow(r:Row):ImportBatch{return{batchId:r.batch_id!,sourceName:r.source_name!,sourceType:r.source_type as ImportBatch["sourceType"],entityType:r.entity_type as ImportBatch["entityType"],checksum:r.checksum!,status:r.status as ImportBatch["status"],totalRows:Number(r.total_rows),validRows:Number(r.valid_rows),errorRows:Number(r.error_rows),duplicateRows:Number(r.duplicate_rows),createdBy:r.created_by!,createdAt:r.created_at!,updatedAt:r.updated_at!};}
-function importRowFromRow(r:Row):ImportRow{return{importRowId:r.import_row_id!,batchId:r.batch_id!,sourceRowNumber:Number(r.source_row_number),rawData:json(r.raw_data!,{}),normalizedData:json(r.normalized_data!,{}),rowStatus:r.row_status as ImportRow["rowStatus"],issues:json(r.issues!,[]),...(r.target_entity_id?{targetEntityId:r.target_entity_id}:{}),createdAt:r.created_at!,updatedAt:r.updated_at!};}
+function importRowFromRow(r:Row):ImportRow{return{importRowId:r.import_row_id!,batchId:r.batch_id!,sourceRowNumber:Number(r.source_row_number),rawData:json(r.raw_data!,{}),normalizedData:json(r.normalized_data!,{}),rowStatus:r.row_status as ImportRow["rowStatus"],issues:json(r.issues!,[]),...(r.target_entity_id?{targetEntityId:r.target_entity_id}:{}),...(r.imported_by?{importedBy:r.imported_by}:{}),...(r.imported_at?{importedAt:r.imported_at}:{}),verificationStatus:isVerificationStatus(r.verification_status)?r.verification_status:"NOT_REQUIRED",...(r.reviewer_id?{reviewerId:r.reviewer_id}:{}),...(r.reviewed_at?{reviewedAt:r.reviewed_at}:{}),...(r.review_reason?{reviewReason:r.review_reason}:{}),createdAt:r.created_at!,updatedAt:r.updated_at!};}
+function isVerificationStatus(value:string|undefined):value is ImportRow["verificationStatus"]{return value !== undefined && ["NOT_REQUIRED","PENDING","VERIFIED","REJECTED"].includes(value);}
+function importMappingTemplateFromRow(r:Row):ImportMappingTemplate{return{templateId:r.template_id!,name:r.name!,sourceName:r.source_name!,entityType:"FARMER",headers:json(r.headers!,[]),mapping:json(r.mapping!,{}),createdBy:r.created_by!,updatedBy:r.updated_by!,createdAt:r.created_at!,updatedAt:r.updated_at!};}
 function auditFromRow(r: Row): AuditEvent { return { auditId:r.audit_id!,entityType:r.entity_type as AuditEvent["entityType"],entityId:r.entity_id!,actorId:r.actor_id!,action:r.action!,...(r.reason?{reason:r.reason}:{}),...(r.before?{before:json(r.before,null)}:{}),...(r.after?{after:json(r.after,null)}:{}),occurredAt:r.occurred_at! }; }
 function outboxFromRow(r: Row): OutboxMessage { return { messageId:r.message_id!, channel:"LINE", recipient:r.recipient!, body:r.body!, ...(r.line_message?{lineMessage:json<Record<string,unknown>>(r.line_message,{})}:{}), ...(r.related_entity_id?{relatedEntityId:r.related_entity_id}:{}), status:r.status as OutboxMessage["status"], attempts:Number(r.attempts||0), maxAttempts:Number(r.max_attempts||5), nextAttemptAt:r.next_attempt_at!, ...(r.last_error?{lastError:r.last_error}:{}), createdAt:r.created_at!, updatedAt:r.updated_at! }; }

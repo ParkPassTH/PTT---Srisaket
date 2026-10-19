@@ -19,6 +19,7 @@ import { OutboxService } from "./services/outbox-service.js";
 import { BackupService } from "./services/backup-service.js";
 import { ImportService } from "./services/import-service.js";
 import { StockService } from "./services/stock-service.js";
+import { ImportMappingTemplateService } from "./services/import-mapping-template-service.js";
 
 const loginSchema = z.object({ email: z.string().email(), password: z.string().min(8) });
 const reviewSchema = z.object({
@@ -54,6 +55,11 @@ const importPreviewSchema=z.object({
 });
 const importParseSchema=z.object({sourceName:z.string().trim().min(1).max(200),contentBase64:z.string().min(1)});
 const importActionSchema=z.object({reason:z.string().trim().min(5).max(500)});
+const importListSchema=z.object({verificationStatus:z.enum(["NOT_REQUIRED","PENDING","VERIFIED","REJECTED"]).optional(),limit:z.coerce.number().int().min(1).max(100).default(50)});
+const importMappingTemplateSchema=z.object({
+  name:z.string().trim().min(1).max(120),sourceName:z.string().trim().min(1).max(200),entityType:z.literal("FARMER"),
+  headers:z.array(z.string().trim().min(1).max(120)).min(2).max(50),mapping:z.record(z.enum(importFarmerFields),z.string().trim().min(1).max(120))
+});
 const stockMovementSchema=z.object({
   type:z.enum(["RECEIVE","RESERVE","RELEASE","SHIP","ADJUST","RECALL"]),
   quantity:z.coerce.number().finite(), unit:z.string().trim().min(1).max(30),
@@ -76,6 +82,7 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
   const backupService = new BackupService(repository);
   const importService = new ImportService(repository);
   const stockService = new StockService(repository);
+  const importMappingTemplateService = new ImportMappingTemplateService(repository);
   const publicDirectory = fileURLToPath(new URL("../public", import.meta.url));
 
   app.set("trust proxy", 1);
@@ -205,6 +212,22 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
     try{response.json(await importService.parseFile(importParseSchema.parse(request.body)));}catch(error){next(error);}
   });
 
+  app.get("/api/import-mapping-templates",auth.requireUser,auth.requireRole("ADMIN"),async(_request,response,next)=>{
+    try{response.json({templates:await importMappingTemplateService.list()});}catch(error){next(error);}
+  });
+
+  app.post("/api/import-mapping-templates",auth.requireUser,auth.requireRole("ADMIN"),async(request,response,next)=>{
+    try{response.status(201).json({template:await importMappingTemplateService.create(importMappingTemplateSchema.parse(request.body),request.user!.userId)});}catch(error){next(error);}
+  });
+
+  app.patch("/api/import-mapping-templates/:templateId",auth.requireUser,auth.requireRole("ADMIN"),async(request,response,next)=>{
+    try{response.json({template:await importMappingTemplateService.update(z.string().min(1).parse(request.params.templateId),importMappingTemplateSchema.partial().parse(request.body),request.user!.userId)});}catch(error){next(error);}
+  });
+
+  app.get("/api/imports", auth.requireUser, auth.requireRole("ADMIN"), async (request,response,next)=>{
+    try{const input=importListSchema.parse(request.query);response.json(await importService.listBatches({limit:input.limit,...(input.verificationStatus?{verificationStatus:input.verificationStatus}:{})}));}catch(error){next(error);}
+  });
+
   app.get("/api/imports/:batchId", auth.requireUser, auth.requireRole("ADMIN"), async (request,response,next)=>{
     try{response.json(await importService.getBatch(z.string().min(1).parse(request.params.batchId)));}catch(error){next(error);}
   });
@@ -219,6 +242,14 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
 
   app.post("/api/imports/:batchId/void", auth.requireUser, auth.requireRole("ADMIN"), async (request,response,next)=>{
     try{const input=importActionSchema.parse(request.body);response.json(await importService.void(z.string().min(1).parse(request.params.batchId),request.user!.userId,input.reason));}catch(error){next(error);}
+  });
+
+  app.post("/api/imports/:batchId/rows/:rowId/verify", auth.requireUser, auth.requireRole("ADMIN"), async (request,response,next)=>{
+    try{const input=importActionSchema.parse(request.body);response.json(await importService.reviewRow(z.string().min(1).parse(request.params.batchId),z.string().min(1).parse(request.params.rowId),"VERIFIED",request.user!.userId,input.reason));}catch(error){next(error);}
+  });
+
+  app.post("/api/imports/:batchId/rows/:rowId/reject", auth.requireUser, auth.requireRole("ADMIN"), async (request,response,next)=>{
+    try{const input=importActionSchema.parse(request.body);response.json(await importService.reviewRow(z.string().min(1).parse(request.params.batchId),z.string().min(1).parse(request.params.rowId),"REJECTED",request.user!.userId,input.reason));}catch(error){next(error);}
   });
 
   app.get("/api/farmers", auth.requireUser, async (_request, response, next) => {

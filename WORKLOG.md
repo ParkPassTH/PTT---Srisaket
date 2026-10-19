@@ -341,3 +341,13 @@
 - คำนวณ on-hand/reserved/available จาก ledger ป้องกันยอดติดลบ หน่วยไม่ตรง และ reference ซ้ำ; ล็อตใหม่สร้าง RECEIVE อัตโนมัติแบบ idempotent
 - แก้ test fixture ที่หน่วยภาษาไทยเข้ารหัสผิด แล้วตรวจรวม `npm run check` ผ่าน typecheck, automated tests 43/43 และ production build
 - ตรวจหน้า Import บน desktop/mobile ตาม Impeccable; mobile viewport 390px ไม่มี horizontal overflow และบันทึกภาพตรวจไว้ใน `.impeccable/review`
+
+## 2026-10-20 — Stock operations and import accountability
+
+- เพิ่มหน้า Stock operations ในรายการล็อต แสดง on-hand/reserved/available, เวลาอัปเดต และ movement history จาก ledger จริง
+- เพิ่มการจอง ปลดจอง จ่ายออก ปรับยอด และเรียกคืนจากเว็บ พร้อม validation, error/retry/empty/loading, ป้องกัน double submit และใช้ idempotency reference เดิมเมื่อ retry
+- เพิ่ม provenance ระดับ ImportRow: ผู้นำเข้า เวลานำเข้า สถานะ PENDING/VERIFIED/REJECTED ผู้ตรวจ เวลา และเหตุผล โดยไม่ลบหรือแก้ target entity เงียบ ๆ
+- เพิ่ม API list/filter batch และ verify/reject รายแถว พร้อม audit snapshot ก่อน–หลังและพฤติกรรม idempotent
+- เพิ่ม ImportMappingTemplates บน Memory/Google Sheets พร้อม validation, API list/create/update, audit และ backup/restore ที่ยังอ่าน backup schema เดิมได้
+- ตรวจ desktop/dialog/mobile 390px ตาม Impeccable ไม่มี overflow และจำลอง double-click การจองแล้วเกิด POST เพียงครั้งเดียว
+- ตรวจรวม `npm run check` ผ่าน typecheck, automated tests 51/51 และ production build; dependency audit 0 vulnerabilities

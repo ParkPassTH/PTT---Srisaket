@@ -69,7 +69,7 @@ export class ImportService {
       if (duplicate) issues.push({ field:"memberCode", code:"DUPLICATE", message:"รหัสสมาชิกซ้ำกับระบบหรือแถวก่อนหน้า" });
       return {
         importRowId:createId("IMR"), batchId:"", sourceRowNumber:index + 2, rawData:safeRecord(raw), normalizedData:{...data},
-        rowStatus:duplicate ? "DUPLICATE" : issues.length ? "ERROR" : "VALID", issues, createdAt:now, updatedAt:now
+        rowStatus:duplicate ? "DUPLICATE" : issues.length ? "ERROR" : "VALID", issues, verificationStatus:"NOT_REQUIRED", createdAt:now, updatedAt:now
       };
     });
     const batchId = createId("IMP");
@@ -114,7 +114,8 @@ export class ImportService {
         ...(data.totalAreaRai !== undefined ? { totalAreaRai:data.totalAreaRai } : {})
       };
       await this.repository.saveFarmer(farmer);
-      row.rowStatus = "COMMITTED"; row.targetEntityId = farmerId; row.updatedAt = committedAt;
+      row.rowStatus = "COMMITTED"; row.targetEntityId = farmerId; row.importedBy = actorId; row.importedAt = committedAt;
+      row.verificationStatus = "PENDING"; row.updatedAt = committedAt;
       await this.repository.saveImportRow(row);
       await this.repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"FARMER", entityId:farmerId, actorId, action:"IMPORT_CREATE", reason, after:farmer, occurredAt:committedAt });
     }
@@ -122,6 +123,43 @@ export class ImportService {
     await this.repository.saveImportBatch(committed);
     await this.repository.saveAuditEvent({ auditId:createId("AUD"), entityType:"IMPORT_BATCH", entityId:batchId, actorId, action:"IMPORT_COMMITTED", reason, before:{ status:batch.status }, after:{ status:"COMMITTED", committedRows:rows.length }, occurredAt:committedAt });
     return { batch:committed, rows, committedRows:rows.length, reused:false };
+  }
+
+  async listBatches(input: { verificationStatus?: ImportRow["verificationStatus"]; limit?: number } = {}) {
+    const batches = (await this.repository.listImportBatches()).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+    const results = [];
+    for (const batch of batches) {
+      const rows = await this.repository.listImportRows(batch.batchId);
+      const verification = {
+        pending:rows.filter((row)=>row.verificationStatus === "PENDING").length,
+        verified:rows.filter((row)=>row.verificationStatus === "VERIFIED").length,
+        rejected:rows.filter((row)=>row.verificationStatus === "REJECTED").length,
+        notRequired:rows.filter((row)=>row.verificationStatus === "NOT_REQUIRED").length
+      };
+      if (input.verificationStatus && !rows.some((row)=>row.verificationStatus===input.verificationStatus)) continue;
+      results.push({ batch, verification });
+      if (results.length >= (input.limit ?? 50)) break;
+    }
+    return { batches:results };
+  }
+
+  async reviewRow(batchId:string, rowId:string, decision:"VERIFIED"|"REJECTED", reviewerId:string, reason:string) {
+    const batch = await this.requireBatch(batchId);
+    if (batch.status !== "COMMITTED") throw new HttpError(409,"IMPORT_NOT_COMMITTED","ตรวจยืนยันได้เฉพาะรายการที่นำเข้าแล้ว");
+    const row = (await this.repository.listImportRows(batchId)).find((item)=>item.importRowId===rowId);
+    if (!row) throw new HttpError(404,"IMPORT_ROW_NOT_FOUND","ไม่พบแถวข้อมูลนำเข้า");
+    if (row.rowStatus !== "COMMITTED" || !row.targetEntityId) throw new HttpError(409,"IMPORT_ROW_NOT_COMMITTED","แถวนี้ยังไม่มีข้อมูลปลายทางให้ตรวจยืนยัน");
+    if (row.verificationStatus === decision) return { row, reused:true };
+    const before = structuredClone(row);
+    const reviewedAt = new Date().toISOString();
+    const updated:ImportRow = { ...row, verificationStatus:decision, reviewerId, reviewedAt, reviewReason:reason, updatedAt:reviewedAt };
+    await this.repository.saveImportRow(updated);
+    await this.repository.saveAuditEvent({
+      auditId:createId("AUD"), entityType:"IMPORT_BATCH", entityId:batchId, actorId:reviewerId,
+      action:decision === "VERIFIED" ? "IMPORT_ROW_VERIFIED" : "IMPORT_ROW_REJECTED", reason,
+      before, after:updated, occurredAt:reviewedAt
+    });
+    return { row:updated, reused:false };
   }
 
   async void(batchId: string, actorId: string, reason: string) {

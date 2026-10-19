@@ -35,6 +35,18 @@ async function capture(page, name) {
   await page.screenshot({ path: `.impeccable/review/${name}.png`, fullPage: true });
 }
 
+async function mockStockLedger(page) {
+  const recorded = [];
+  const lot = { lotId:"LOT-DEMO-001", activityId:"ACT-DEMO", farmerId:"F-001", farmerName:"สมชาย ใจดี", plotName:"แปลงหอมแดงเหนือ", crop:"หอมแดง", quantity:1200, unit:"กก.", harvestDate:"2026-10-18", inventoryStatus:"IN_STOCK", traceToken:"demo", storageLocationName:"คลังกลาง", createdAt:"2026-10-18T02:00:00.000Z", updatedAt:"2026-10-19T04:30:00.000Z" };
+  await page.route("**/api/lots", (route) => route.fulfill({ status:200, contentType:"application/json", body:JSON.stringify({ lots:[lot] }) }));
+  await page.route("**/api/lots/LOT-DEMO-001/stock", (route) => route.fulfill({ status:200, contentType:"application/json", body:JSON.stringify({ balance:{lotId:lot.lotId,unit:lot.unit,onHand:1050,reserved:300,available:750,recalled:false,updatedAt:"2026-10-19T04:30:00.000Z"}, movements:[{movementId:"MOV-1",lotId:lot.lotId,movementType:"RECEIVE",quantity:1200,unit:lot.unit,actorId:"เจ้าหน้าที่คลัง",reason:"รับผลผลิตจากกิจกรรมเก็บเกี่ยว",reference:"demo-1",occurredAt:"2026-10-18T02:00:00.000Z"},{movementId:"MOV-2",lotId:lot.lotId,movementType:"RESERVE",quantity:300,unit:lot.unit,actorId:"เจ้าหน้าที่คลัง",reason:"จองสำหรับคำสั่งซื้อ PO-104",reference:"demo-2",occurredAt:"2026-10-19T03:00:00.000Z"},{movementId:"MOV-3",lotId:lot.lotId,movementType:"SHIP",quantity:150,unit:lot.unit,actorId:"เจ้าหน้าที่คลัง",reason:"จ่ายสินค้าตามใบส่งของ DN-008",reference:"demo-3",occurredAt:"2026-10-19T04:30:00.000Z"}] }) }));
+  await page.route("**/api/lots/LOT-DEMO-001/stock-movements", async (route) => {
+    recorded.push(route.request().postDataJSON());
+    await route.fulfill({ status:201, contentType:"application/json", body:JSON.stringify({ created:true, movement:{movementId:"MOV-4"}, balance:{lotId:lot.lotId,unit:lot.unit,onHand:1050,reserved:325,available:725,recalled:false} }) });
+  });
+  return recorded;
+}
+
 try {
   await mkdir(".impeccable/review", { recursive: true });
   await waitForServer();
@@ -58,9 +70,18 @@ try {
   await desktop.locator('[data-view="integrations"]').click();
   await desktop.locator("#integrations-content").waitFor({ state:"visible" });
   await capture(desktop, "integrations-desktop");
+  const recordedStockActions = await mockStockLedger(desktop);
   await desktop.locator('[data-view="lots"]').click();
   await desktop.locator("#lots-content").waitFor({ state:"visible" });
+  await desktop.getByRole("button", { name:"จองสินค้า" }).waitFor();
   await capture(desktop, "lots-desktop");
+  await desktop.getByRole("button", { name:"จองสินค้า" }).click();
+  await desktop.getByLabel("ปริมาณ (กก.)").fill("25");
+  await desktop.locator("#entity-dialog").getByRole("textbox", { name:"เหตุผล" }).fill("จองสำหรับคำสั่งซื้อทดสอบ PO-105");
+  await capture(desktop, "stock-operation-dialog-desktop");
+  await desktop.locator("#entity-form button[type=submit]").evaluate((button) => { button.click(); button.click(); });
+  await desktop.locator("#entity-dialog").waitFor({ state:"hidden" });
+  if (recordedStockActions.length !== 1 || recordedStockActions[0].type !== "RESERVE" || recordedStockActions[0].quantity !== 25) throw new Error(`Stock action guard failed: ${JSON.stringify(recordedStockActions)}`);
   await desktop.locator('[data-view="reports"]').click();
   await desktop.locator("#reports-content").waitFor({ state:"visible" });
   await capture(desktop, "reports-desktop");
@@ -96,9 +117,18 @@ try {
   await mobile.locator("#imports-content").waitFor({ state:"visible" });
   await mobile.waitForTimeout(300);
   await capture(mobile, "imports-mobile");
+  await mockStockLedger(mobile);
+  await mobile.locator("#menu-button").click();
+  await mobile.locator('[data-view="lots"]').click();
+  await mobile.locator("#lots-content").waitFor({ state:"visible" });
+  await mobile.waitForFunction(() => !document.querySelector("#lot-count")?.textContent?.includes("กำลังโหลด"));
+  await mobile.waitForTimeout(300);
+  const lotOverflow = await mobile.evaluate(() => ({ viewport:document.documentElement.clientWidth, scrollWidth:document.documentElement.scrollWidth }));
+  if (lotOverflow.scrollWidth > lotOverflow.viewport + 1) throw new Error(`Lots mobile overflow: ${JSON.stringify(lotOverflow)}`);
+  await capture(mobile, "lots-mobile");
 
   await browser.close();
-  console.log(JSON.stringify({ ok: true, captures: ["login-desktop.png", "desktop.png", "farmers-desktop.png", "integrations-desktop.png", "lots-desktop.png", "reports-desktop.png", "imports-desktop.png", "login-mobile.png", "mobile.png", "farmers-mobile.png", "imports-mobile.png"] }));
+  console.log(JSON.stringify({ ok: true, captures: ["login-desktop.png", "desktop.png", "farmers-desktop.png", "integrations-desktop.png", "lots-desktop.png", "stock-operation-dialog-desktop.png", "reports-desktop.png", "imports-desktop.png", "login-mobile.png", "mobile.png", "farmers-mobile.png", "imports-mobile.png", "lots-mobile.png"] }));
 } finally {
   server.kill();
 }
