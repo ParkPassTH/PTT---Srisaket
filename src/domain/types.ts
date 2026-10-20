@@ -170,9 +170,34 @@ export interface StockBalance {
   updatedAt?: string;
 }
 
+export type AllocationEventType = "ALLOCATE" | "RELEASE" | "SHIP" | "EXPIRE";
+export type AllocationStatus = "ACTIVE" | "RELEASED" | "SHIPPED" | "EXPIRED";
+/** Append-only reservation lifecycle evidence. */
+export interface AllocationEvent {
+  eventId:string; allocationId:string; lotId:string; eventType:AllocationEventType; quantity:number; unit:string;
+  responsibleName:string; recipientName:string; orderReference:string; documentReference?:string; expiresAt:string;
+  reason:string; reference:string; actorId:string; stockMovementId:string; occurredAt:string;
+}
+export interface Allocation {
+  allocationId:string; lotId:string; quantity:number; unit:string; responsibleName:string; recipientName:string;
+  orderReference:string; documentReference?:string; expiresAt:string; status:AllocationStatus;
+  createdAt:string; updatedAt:string; lastEventId:string;
+}
+
+export type LotStandardCode = "T1" | "T2" | "PASSED" | "ON_HOLD" | "REJECTED";
+export interface LotStandardDefinition {
+  definitionId:string; code:LotStandardCode; name:string; description:string; active:boolean;
+  createdBy:string; createdAt:string; updatedBy:string; updatedAt:string;
+}
+/** Append-only human decision. The latest effective record is current. */
+export interface LotStandardHistory {
+  historyId:string; lotId:string; definitionId:string; status:LotStandardCode; actorId:string;
+  reason:string; evidenceReference:string; effectiveAt:string; recordedAt:string;
+}
+
 export interface ImportIssue { field?: string; code: string; message: string; }
 export interface ImportBatch {
-  batchId:string; sourceName:string; sourceType:"CSV"|"XLSX"|"OCR"|"API"; entityType:"FARMER";
+  batchId:string; sourceName:string; sourceType:"CSV"|"XLSX"|"OCR"|"API"; entityType:"FARMER"|"PLOT";
   checksum:string; status:"PREVIEW"|"READY"|"COMMITTED"|"VOID"; totalRows:number; validRows:number; errorRows:number; duplicateRows:number;
   createdBy:string; createdAt:string; updatedAt:string;
 }
@@ -184,15 +209,17 @@ export interface ImportRow {
 }
 
 export type FarmerImportField = "memberCode" | "displayName" | "lineUserId" | "status" | "address" | "phone" | "registeredAt" | "totalAreaRai";
+export type PlotImportField = "plotId" | "farmerId" | "memberCode" | "name" | "crop" | "status" | "areaRai" | "gpsLat" | "gpsLng";
 export type FarmerImportMapping = Partial<Record<FarmerImportField, string>>;
+export type PlotImportMapping = Partial<Record<PlotImportField, string>>;
 export interface ImportMappingTemplate {
-  templateId:string; name:string; sourceName:string; entityType:"FARMER"; headers:string[]; mapping:FarmerImportMapping;
+  templateId:string; name:string; sourceName:string; entityType:"FARMER"|"PLOT"; headers:string[]; mapping:FarmerImportMapping|PlotImportMapping;
   createdBy:string; updatedBy:string; createdAt:string; updatedAt:string;
 }
 
 export interface AuditEvent {
   auditId: string;
-  entityType: "ACTIVITY" | "LOT" | "STOCK_MOVEMENT" | "FARMER" | "PLOT" | "STORAGE_LOCATION" | "IMPORT_BATCH" | "IMPORT_MAPPING_TEMPLATE" | "REPORT" | "USER" | "RULE" | "OUTBOX";
+  entityType: "ACTIVITY" | "LOT" | "STOCK_MOVEMENT" | "ALLOCATION" | "LOT_STANDARD" | "STANDARD_DEFINITION" | "FARMER" | "PLOT" | "STORAGE_LOCATION" | "IMPORT_BATCH" | "IMPORT_MAPPING_TEMPLATE" | "REPORT" | "USER" | "RULE" | "OUTBOX";
   entityId: string;
   actorId: string;
   action: string;

@@ -11,7 +11,7 @@
     "build": "tsc -p tsconfig.json && node scripts/copy-public.mjs",
     "start": "node dist/src/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test tests/app.test.ts tests/ics-rules.test.ts tests/line-service.test.ts tests/gemini-service.test.ts tests/outbox-service.test.ts tests/backup-service.test.ts tests/stock-service.test.ts tests/import-service.test.ts tests/import-mapping-template-service.test.ts",
+    "test": "tsx --test tests/app.test.ts tests/ics-rules.test.ts tests/line-service.test.ts tests/gemini-service.test.ts tests/outbox-service.test.ts tests/backup-service.test.ts tests/stock-service.test.ts tests/allocation-service.test.ts tests/import-service.test.ts tests/import-mapping-template-service.test.ts tests/lot-standard-impact.test.ts",
     "test:watch": "tsx --test --watch tests/app.test.ts tests/ics-rules.test.ts",
     "check": "npm run typecheck && npm test && npm run build",
     "smoke:integrations": "tsx scripts/smoke-integrations.ts"

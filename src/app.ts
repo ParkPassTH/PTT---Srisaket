@@ -5,6 +5,7 @@ import helmetModule, { type HelmetOptions } from "helmet";
 import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
 import QRCode from "qrcode";
+import { timingSafeEqual } from "node:crypto";
 import type { AppConfig } from "./config.js";
 import type { Repository } from "./repositories/repository.js";
 import { AuthService } from "./services/auth-service.js";
@@ -20,6 +21,9 @@ import { BackupService } from "./services/backup-service.js";
 import { ImportService } from "./services/import-service.js";
 import { StockService } from "./services/stock-service.js";
 import { ImportMappingTemplateService } from "./services/import-mapping-template-service.js";
+import { LotStandardService } from "./services/lot-standard-service.js";
+import { ImpactService } from "./services/impact-service.js";
+import { AllocationService } from "./services/allocation-service.js";
 
 const loginSchema = z.object({ email: z.string().email(), password: z.string().min(8) });
 const reviewSchema = z.object({
@@ -48,23 +52,29 @@ const activityCorrectionSchema = z.object({
 });
 const restoreSchema = z.object({ confirm:z.literal("MERGE_BACKUP"), reason:z.string().trim().min(5).max(500), archive:z.unknown() });
 const importFarmerFields = ["memberCode", "displayName", "lineUserId", "status", "address", "phone", "registeredAt", "totalAreaRai"] as const;
+const importPlotFields = ["plotId","farmerId","memberCode","name","crop","status","areaRai","gpsLat","gpsLng"] as const;
 const importPreviewSchema=z.object({
-  sourceName:z.string().trim().min(1).max(200), sourceType:z.enum(["CSV","XLSX"]).optional(),
+  sourceName:z.string().trim().min(1).max(200), sourceType:z.enum(["CSV","XLSX"]).optional(), entityType:z.enum(["FARMER","PLOT"]).default("FARMER"),
   rows:z.array(z.record(z.unknown())).min(1).max(500),
-  mapping:z.record(z.enum(importFarmerFields),z.string().trim().min(1).max(120)).optional()
+  mapping:z.record(z.enum([...importFarmerFields,...importPlotFields]),z.string().trim().min(1).max(120)).optional()
 });
 const importParseSchema=z.object({sourceName:z.string().trim().min(1).max(200),contentBase64:z.string().min(1)});
 const importActionSchema=z.object({reason:z.string().trim().min(5).max(500)});
 const importListSchema=z.object({verificationStatus:z.enum(["NOT_REQUIRED","PENDING","VERIFIED","REJECTED"]).optional(),limit:z.coerce.number().int().min(1).max(100).default(50)});
 const importMappingTemplateSchema=z.object({
-  name:z.string().trim().min(1).max(120),sourceName:z.string().trim().min(1).max(200),entityType:z.literal("FARMER"),
-  headers:z.array(z.string().trim().min(1).max(120)).min(2).max(50),mapping:z.record(z.enum(importFarmerFields),z.string().trim().min(1).max(120))
+  name:z.string().trim().min(1).max(120),sourceName:z.string().trim().min(1).max(200),entityType:z.enum(["FARMER","PLOT"]),
+  headers:z.array(z.string().trim().min(1).max(120)).min(2).max(50),mapping:z.record(z.enum([...importFarmerFields,...importPlotFields]),z.string().trim().min(1).max(120))
 });
 const stockMovementSchema=z.object({
   type:z.enum(["RECEIVE","RESERVE","RELEASE","SHIP","ADJUST","RECALL"]),
   quantity:z.coerce.number().finite(), unit:z.string().trim().min(1).max(30),
   reason:z.string().trim().min(5).max(500), reference:z.string().trim().min(1).max(200)
 });
+const allocationCreateSchema=z.object({quantity:z.coerce.number().positive(),unit:z.string().trim().min(1).max(30),responsibleName:z.string().trim().min(2).max(120),recipientName:z.string().trim().min(2).max(120),orderReference:z.string().trim().min(1).max(120),documentReference:z.string().trim().max(200).optional(),expiresAt:z.string().datetime({offset:true}),reason:z.string().trim().min(5).max(500),reference:z.string().trim().min(1).max(200)});
+const allocationActionSchema=z.object({reason:z.string().trim().min(5).max(500),reference:z.string().trim().min(1).max(200)});
+const allocationListSchema=z.object({lotId:z.string().trim().min(1).optional(),status:z.enum(["ACTIVE","RELEASED","SHIPPED","EXPIRED"]).optional()});
+const standardDefinitionSchema=z.object({definitionId:z.string().trim().min(1).optional(),code:z.enum(["T1","T2","PASSED","ON_HOLD","REJECTED"]),name:z.string().trim().min(2).max(120),description:z.string().trim().min(5).max(1000),active:z.boolean().default(true)});
+const standardHistorySchema=z.object({definitionId:z.string().trim().min(1),reason:z.string().trim().min(5).max(500),evidenceReference:z.string().trim().min(1).max(500),effectiveAt:z.string().datetime({offset:true})});
 
 // Helmet publishes conditional ESM/CJS exports. Normalize the export explicitly
 // so TypeScript/Vercel and local Node builds agree on the callable middleware.
@@ -83,6 +93,9 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
   const importService = new ImportService(repository);
   const stockService = new StockService(repository);
   const importMappingTemplateService = new ImportMappingTemplateService(repository);
+  const lotStandardService = new LotStandardService(repository);
+  const impactService = new ImpactService(repository);
+  const allocationService = new AllocationService(repository);
   const publicDirectory = fileURLToPath(new URL("../public", import.meta.url));
 
   app.set("trust proxy", 1);
@@ -130,6 +143,23 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
       response.status(line && ai ? 200 : 503).json({ status:line && ai ? "ready" : "degraded", dependencies:{ dataStore:"ok", line:line ? "configured" : "missing", ai:ai ? "configured" : "missing" }, time:new Date().toISOString() });
     } catch { response.status(503).json({ status:"unavailable", dependencies:{ dataStore:"error" }, time:new Date().toISOString() }); }
   });
+
+  const processWorkers:RequestHandler=async(request,response,next)=>{
+    try {
+      if(!config.CRON_SECRET) throw new HttpError(503,"WORKER_NOT_CONFIGURED","ยังไม่ได้ตั้งค่า CRON_SECRET");
+      const authorization=request.header("authorization")??"";
+      const expected=`Bearer ${config.CRON_SECRET}`;
+      const provided=Buffer.from(authorization);
+      const target=Buffer.from(expected);
+      if(provided.length!==target.length||!timingSafeEqual(provided,target)) throw new HttpError(401,"WORKER_AUTH_REQUIRED","ข้อมูลยืนยัน worker ไม่ถูกต้อง");
+      const [messages,expired]=await Promise.all([outboxService.processDue(),allocationService.processExpired()]);
+      const occurredAt=new Date().toISOString();
+      await repository.saveAuditEvent({auditId:createId("AUD"),entityType:"REPORT",entityId:`worker-${occurredAt}`,actorId:"system-cron",action:"PROCESS_DUE_WORK",after:{outboxProcessed:messages.length,allocationsExpired:expired.processed},occurredAt});
+      response.json({ok:true,outboxProcessed:messages.length,allocationsExpired:expired.processed,processedAt:occurredAt});
+    } catch(error){next(error);}
+  };
+  app.get("/api/system/workers/process",processWorkers);
+  app.post("/api/system/workers/process",processWorkers);
 
   app.post("/api/auth/login", rateLimit({ windowMs: 15 * 60 * 1000, limit: 10 }), (request, response, next) => {
     try {
@@ -418,9 +448,36 @@ export function createApp(dependencies: { config: AppConfig; repository: Reposit
     } catch(error){ next(error); }
   });
 
+  app.get("/api/allocations",auth.requireUser,async(request,response,next)=>{
+    try{const query=allocationListSchema.parse(request.query);const filters={...(query.lotId?{lotId:query.lotId}:{}),...(query.status?{status:query.status}:{})};response.json({allocations:await allocationService.list(filters)});}catch(error){next(error);}
+  });
+  app.post("/api/lots/:lotId/allocations",auth.requireUser,auth.requireRole("WAREHOUSE","ADMIN"),async(request,response,next)=>{
+    try{const input=allocationCreateSchema.parse(request.body);const result=await allocationService.create({lotId:request.params.lotId as string,...input},request.user!.userId);response.status(result.created?201:200).json(result);}catch(error){next(error);}
+  });
+  app.post("/api/allocations/:allocationId/release",auth.requireUser,auth.requireRole("WAREHOUSE","ADMIN"),async(request,response,next)=>{
+    try{const input=allocationActionSchema.parse(request.body);const result=await allocationService.release(request.params.allocationId as string,request.user!.userId,input.reason,input.reference);response.status(result.created?201:200).json(result);}catch(error){next(error);}
+  });
+  app.post("/api/allocations/:allocationId/ship",auth.requireUser,auth.requireRole("WAREHOUSE","ADMIN"),async(request,response,next)=>{
+    try{const input=allocationActionSchema.parse(request.body);const result=await allocationService.ship(request.params.allocationId as string,request.user!.userId,input.reason,input.reference);response.status(result.created?201:200).json(result);}catch(error){next(error);}
+  });
+  app.post("/api/system/allocations/process-expired",auth.requireUser,auth.requireRole("ADMIN"),async(request,response,next)=>{
+    try{response.json(await allocationService.processExpired(new Date(),request.user!.userId));}catch(error){next(error);}
+  });
+
+  app.get("/api/standard-definitions",auth.requireUser,async(_request,response,next)=>{try{response.json({definitions:await lotStandardService.listDefinitions()});}catch(error){next(error);}});
+  app.post("/api/standard-definitions",auth.requireUser,auth.requireRole("ADMIN"),async(request,response,next)=>{try{const input=standardDefinitionSchema.omit({definitionId:true}).parse(request.body);response.status(201).json({definition:await lotStandardService.saveDefinition(input,request.user!.userId)});}catch(error){next(error);}});
+  app.patch("/api/standard-definitions/:definitionId",auth.requireUser,auth.requireRole("ADMIN"),async(request,response,next)=>{try{const parsed=standardDefinitionSchema.omit({definitionId:true}).parse(request.body);const input={...parsed,definitionId:request.params.definitionId as string};response.json({definition:await lotStandardService.saveDefinition(input,request.user!.userId)});}catch(error){next(error);}});
+  app.get("/api/lots/:lotId/standard",auth.requireUser,async(request,response,next)=>{try{response.json(await lotStandardService.getLotStandard(request.params.lotId as string));}catch(error){next(error);}});
+  app.post("/api/lots/:lotId/standard-history",auth.requireUser,auth.requireRole("REVIEWER","ADMIN"),async(request,response,next)=>{try{const input=standardHistorySchema.parse(request.body);response.status(201).json(await lotStandardService.record(request.params.lotId as string,input,request.user!.userId));}catch(error){next(error);}});
+  app.get("/api/reports/impact",auth.requireUser,async(_request,response,next)=>{try{response.json(await impactService.measure());}catch(error){next(error);}});
+
   app.post("/api/lots/:lotId/stock-movements",auth.requireUser,auth.requireRole("WAREHOUSE","ADMIN"),async(request,response,next)=>{
     try {
       const input=stockMovementSchema.parse(request.body);
+      if(["RESERVE","SHIP"].includes(input.type)) {
+        const standard=await lotStandardService.getLotStandard(request.params.lotId as string);
+        if(standard.availabilityEligible===false) throw new HttpError(409,"LOT_STANDARD_BLOCKED","ล็อตอยู่ในสถานะพักใช้หรือไม่ผ่านมาตรฐาน จึงจองหรือจ่ายออกไม่ได้");
+      }
       const result=await stockService.record({lotId:request.params.lotId as string,movementType:input.type,quantity:input.quantity,unit:input.unit,reason:input.reason,reference:input.reference,actorId:request.user!.userId});
       response.status(result.created?201:200).json(result);
     } catch(error){ next(error); }

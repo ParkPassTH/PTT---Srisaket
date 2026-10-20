@@ -7,6 +7,7 @@ const envSchema = z.object({
   APP_BASE_URL: z.string().url().default("http://localhost:3000"),
   DATA_DRIVER: z.enum(["memory", "google-sheets"]).default("memory"),
   SESSION_SECRET: z.string().min(32).default("development-only-secret-change-me-now"),
+  CRON_SECRET: z.string().min(32).optional(),
   ADMIN_EMAIL: z.string().email().default("admin@example.com"),
   ADMIN_PASSWORD: z.string().min(8).default("change-this-before-deploy"),
   LINE_CHANNEL_SECRET: z.string().optional(),

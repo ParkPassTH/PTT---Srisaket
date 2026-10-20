@@ -34,6 +34,9 @@ This document makes the MVP inspectable and portable. Google Sheets is the curre
 | `ImportRows` | `import_row_id` | `batch_id → ImportBatches` | Row-level source, normalization and issues |
 | `ImportMappingTemplates` | `template_id` | reusable per source/entity | Saved source headers and canonical field mappings |
 | `StockMovements` | `movement_id` | `lot_id → Lots`; `(lot_id, reference)` idempotency | Append-only inventory ledger |
+| `AllocationEvents` | `event_id` | `lot_id → Lots`; global `reference` idempotency | Append-only reservation/allocation lifecycle |
+| `LotStandardDefinitions` | `definition_id` | unique controlled status code | ICS-approved meaning of T1/T2/PASSED/ON_HOLD/REJECTED; no definition is seeded by assumption |
+| `LotStandardHistory` | `history_id` | `lot_id → Lots`, `definition_id → LotStandardDefinitions` | Append-only human standard decisions and evidence |
 
 Canonical column names are defined by `TABLES` in `src/repositories/google-sheets-repository.ts`; the adapter appends missing headers without moving or deleting existing columns.
 
@@ -99,6 +102,10 @@ Transactions must reject negative balances and unit mismatches.
 
 Implementation note: Google Sheets enforces `(lot_id, reference)` through the service/repository path. A PostgreSQL/Supabase migration must add a database-level `UNIQUE (lot_id, reference)` constraint for atomic enforcement.
 
+### AllocationEvent
+
+Allocation state is derived from append-only events rather than overwritten. `ALLOCATE` reserves stock and captures the responsible person, recipient, order/document references and expiry. Exactly one terminal event (`RELEASE`, `SHIP`, or `EXPIRE`) closes an active allocation and links to its idempotent stock movement. In PostgreSQL/Supabase, enforce a unique event `reference`, foreign keys to the lot and stock movement, and a transaction covering both records.
+
 ### LotStandardHistory
 
 Append-only history containing lot, controlled status (`T1`, `T2`, `PASSED`, `ON_HOLD`, `REJECTED` after ICS approval), effective time, actor, reason, and evidence reference. The latest effective record is current; status is never silently overwritten.
@@ -114,6 +121,7 @@ erDiagram
   ACTIVITY ||--o| LOT : creates
   STORAGE_LOCATION ||--o{ LOT : stores
   LOT ||--o{ STOCK_MOVEMENT : has
+  LOT ||--o{ ALLOCATION_EVENT : reserves_for
   LOT ||--o{ LOT_STANDARD_HISTORY : classified_as
   IMPORT_BATCH ||--o{ IMPORT_ROW : stages
   AUDIT_EVENT }o--|| FARMER : audits

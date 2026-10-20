@@ -50,6 +50,15 @@ describe("backup and merge restore", () => {
     const validated=service.validate(legacy);
     assert.equal(validated.archive.entities.importMappingTemplates.length,0);
   });
+
+  it("backs up and restores append-only allocation events without duplication",async()=>{
+    const source=new MemoryRepository();
+    await source.appendAllocationEvent({eventId:"ALE-1",allocationId:"ALLOC-1",lotId:"LOT-1",eventType:"ALLOCATE",quantity:5,unit:"kg",responsibleName:"Warehouse",recipientName:"Buyer",orderReference:"ORDER-1",expiresAt:"2026-10-21T00:00:00.000Z",reason:"confirmed order",reference:"allocation:create:1",actorId:"ADMIN",stockMovementId:"MOV-1",occurredAt:"2026-10-20T00:00:00.000Z"});
+    const archive=await new BackupService(source).export(); assert.equal(archive.entities.allocationEvents.length,1);
+    const target=new MemoryRepository(); const restore=new BackupService(target);
+    await restore.merge(archive,"ADMIN","restore allocation evidence"); await restore.merge(archive,"ADMIN","repeat restore allocation evidence");
+    assert.equal((await target.listAllocationEvents()).length,1);
+  });
 });
 
 function canonical(value:unknown):unknown {

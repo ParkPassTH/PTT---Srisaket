@@ -39,6 +39,9 @@ async function mockStockLedger(page) {
   const recorded = [];
   const lot = { lotId:"LOT-DEMO-001", activityId:"ACT-DEMO", farmerId:"F-001", farmerName:"สมชาย ใจดี", plotName:"แปลงหอมแดงเหนือ", crop:"หอมแดง", quantity:1200, unit:"กก.", harvestDate:"2026-10-18", inventoryStatus:"IN_STOCK", traceToken:"demo", storageLocationName:"คลังกลาง", createdAt:"2026-10-18T02:00:00.000Z", updatedAt:"2026-10-19T04:30:00.000Z" };
   await page.route("**/api/lots", (route) => route.fulfill({ status:200, contentType:"application/json", body:JSON.stringify({ lots:[lot] }) }));
+  await page.route("**/api/standard-definitions", (route) => route.fulfill({ status:200, contentType:"application/json", body:JSON.stringify({ definitions:[{definitionId:"STD-HOLD",code:"ON_HOLD",name:"พักการจัดสรร",description:"รอตรวจหลักฐานเพิ่มเติม",active:true}] }) }));
+  await page.route("**/api/lots/LOT-DEMO-001/standard", (route) => route.fulfill({ status:200, contentType:"application/json", body:JSON.stringify({ definitions:[],history:[],availabilityEligible:null }) }));
+  await page.route("**/api/allocations", (route) => route.fulfill({ status:200, contentType:"application/json", body:JSON.stringify({ allocations:[{allocationId:"ALC-001",lotId:lot.lotId,quantity:100,unit:lot.unit,responsibleName:"เจ้าหน้าที่คลัง",recipientName:"สหกรณ์ตัวอย่าง",orderReference:"PO-100",expiresAt:"2026-10-25T10:00:00.000Z",status:"ACTIVE"}] }) }));
   await page.route("**/api/lots/LOT-DEMO-001/stock", (route) => route.fulfill({ status:200, contentType:"application/json", body:JSON.stringify({ balance:{lotId:lot.lotId,unit:lot.unit,onHand:1050,reserved:300,available:750,recalled:false,updatedAt:"2026-10-19T04:30:00.000Z"}, movements:[{movementId:"MOV-1",lotId:lot.lotId,movementType:"RECEIVE",quantity:1200,unit:lot.unit,actorId:"เจ้าหน้าที่คลัง",reason:"รับผลผลิตจากกิจกรรมเก็บเกี่ยว",reference:"demo-1",occurredAt:"2026-10-18T02:00:00.000Z"},{movementId:"MOV-2",lotId:lot.lotId,movementType:"RESERVE",quantity:300,unit:lot.unit,actorId:"เจ้าหน้าที่คลัง",reason:"จองสำหรับคำสั่งซื้อ PO-104",reference:"demo-2",occurredAt:"2026-10-19T03:00:00.000Z"},{movementId:"MOV-3",lotId:lot.lotId,movementType:"SHIP",quantity:150,unit:lot.unit,actorId:"เจ้าหน้าที่คลัง",reason:"จ่ายสินค้าตามใบส่งของ DN-008",reference:"demo-3",occurredAt:"2026-10-19T04:30:00.000Z"}] }) }));
   await page.route("**/api/lots/LOT-DEMO-001/stock-movements", async (route) => {
     recorded.push(route.request().postDataJSON());
@@ -84,6 +87,7 @@ try {
   if (recordedStockActions.length !== 1 || recordedStockActions[0].type !== "RESERVE" || recordedStockActions[0].quantity !== 25) throw new Error(`Stock action guard failed: ${JSON.stringify(recordedStockActions)}`);
   await desktop.locator('[data-view="reports"]').click();
   await desktop.locator("#reports-content").waitFor({ state:"visible" });
+  await desktop.waitForFunction(() => !document.querySelector("#impact-content")?.textContent?.includes("กำลัง"));
   await capture(desktop, "reports-desktop");
   await desktop.locator('[data-view="imports"]').click();
   await desktop.locator("#imports-content").waitFor({ state:"visible" });
@@ -126,9 +130,15 @@ try {
   const lotOverflow = await mobile.evaluate(() => ({ viewport:document.documentElement.clientWidth, scrollWidth:document.documentElement.scrollWidth }));
   if (lotOverflow.scrollWidth > lotOverflow.viewport + 1) throw new Error(`Lots mobile overflow: ${JSON.stringify(lotOverflow)}`);
   await capture(mobile, "lots-mobile");
+  await mobile.locator("#menu-button").click();
+  await mobile.locator('[data-view="reports"]').click();
+  await mobile.locator("#reports-content").waitFor({ state:"visible" });
+  await mobile.waitForFunction(() => !document.querySelector("#impact-content")?.textContent?.includes("กำลัง"));
+  await mobile.waitForTimeout(300);
+  await capture(mobile, "reports-mobile");
 
   await browser.close();
-  console.log(JSON.stringify({ ok: true, captures: ["login-desktop.png", "desktop.png", "farmers-desktop.png", "integrations-desktop.png", "lots-desktop.png", "stock-operation-dialog-desktop.png", "reports-desktop.png", "imports-desktop.png", "login-mobile.png", "mobile.png", "farmers-mobile.png", "imports-mobile.png", "lots-mobile.png"] }));
+  console.log(JSON.stringify({ ok: true, captures: ["login-desktop.png", "desktop.png", "farmers-desktop.png", "integrations-desktop.png", "lots-desktop.png", "stock-operation-dialog-desktop.png", "reports-desktop.png", "imports-desktop.png", "login-mobile.png", "mobile.png", "farmers-mobile.png", "imports-mobile.png", "lots-mobile.png", "reports-mobile.png"] }));
 } finally {
   server.kill();
 }

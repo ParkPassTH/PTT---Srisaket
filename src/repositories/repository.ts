@@ -1,4 +1,4 @@
-import type { Activity, AuditEvent, Farmer, ImportBatch, ImportMappingTemplate, ImportRow, Lot, OutboxMessage, Plot, Review, StockMovement, StorageLocation } from "../domain/types.js";
+import type { Activity, AllocationEvent, AuditEvent, Farmer, ImportBatch, ImportMappingTemplate, ImportRow, Lot, LotStandardDefinition, LotStandardHistory, OutboxMessage, Plot, Review, StockMovement, StorageLocation } from "../domain/types.js";
 
 export interface ActivityFilters {
   status?: string;
@@ -28,6 +28,14 @@ export interface Repository {
   listStockMovements(lotId?: string): Promise<StockMovement[]>;
   getStockMovementByReference(lotId: string, reference: string): Promise<StockMovement | undefined>;
   appendStockMovement(movement: StockMovement): Promise<void>;
+  listAllocationEvents(lotId?: string): Promise<AllocationEvent[]>;
+  getAllocationEventByReference(reference: string): Promise<AllocationEvent | undefined>;
+  appendAllocationEvent(event: AllocationEvent): Promise<void>;
+  listLotStandardDefinitions():Promise<LotStandardDefinition[]>;
+  getLotStandardDefinition(definitionId:string):Promise<LotStandardDefinition|undefined>;
+  saveLotStandardDefinition(definition:LotStandardDefinition):Promise<void>;
+  listLotStandardHistory(lotId?:string):Promise<LotStandardHistory[]>;
+  appendLotStandardHistory(history:LotStandardHistory):Promise<void>;
   listStorageLocations(): Promise<StorageLocation[]>;
   getStorageLocation(locationId: string): Promise<StorageLocation | undefined>;
   saveStorageLocation(location: StorageLocation): Promise<void>;

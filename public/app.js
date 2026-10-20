@@ -1,4 +1,5 @@
-const state = { user: null, dashboard: null, activities: [], farmers: [], plots: [], lots: [], lotStock: {}, storageLocations: [], selectedActivity: null, drawerInvoker: null, currentView: "overview", formMode: null, backupArchive: null, importFile: null, importParsed: null, importPreview: null };
+const state = { user: null, dashboard: null, activities: [], farmers: [], plots: [], lots: [], lotStock: {}, lotStandards:{}, standardDefinitions:[], allocations:[], storageLocations: [], selectedActivity: null, drawerInvoker: null, currentView: "overview", formMode: null, backupArchive: null, importFile: null, importParsed: null, importPreview: null, importTemplates:[], importReviewBatches:[] };
+const importFieldConfig={FARMER:[['memberCode','รหัสสมาชิก',true],['displayName','ชื่อเกษตรกร',true],['lineUserId','LINE user ID'],['status','สถานะ'],['address','ที่อยู่'],['phone','โทรศัพท์'],['registeredAt','วันที่ลงทะเบียน'],['totalAreaRai','พื้นที่รวม (ไร่)']],PLOT:[['plotId','รหัสแปลง'],['farmerId','รหัสเกษตรกร'],['memberCode','รหัสสมาชิก'],['name','ชื่อแปลง',true],['crop','พืช',true],['status','สถานะ'],['areaRai','พื้นที่ (ไร่)'],['gpsLat','ละติจูด'],['gpsLng','ลองจิจูด']]};
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -28,7 +29,9 @@ async function api(path, options = {}) {
 }
 
 function formatDateTime(value) {
-  return new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  const date=new Date(value);
+  if(!value||Number.isNaN(date.getTime())) return "ไม่ระบุเวลา";
+  return new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
 function escapeHtml(value = "") {
@@ -145,7 +148,8 @@ async function showView(view) {
   if (view === "farmers") await loadFarmers();
   if (view === "integrations") await loadIntegrations();
   if (view === "lots") await loadLots();
-  if (view === "reports") renderReports();
+  if (view === "reports") await loadImpactReport();
+  if (view === "imports") await loadImportWorkspace();
   if (view === "reviews") document.querySelector(".review-panel")?.scrollIntoView({ behavior:"smooth", block:"start" });
   if (view === "activities") document.querySelector(".registry-panel")?.scrollIntoView({ behavior:"smooth", block:"start" });
 }
@@ -154,14 +158,17 @@ async function loadLots() {
   $("#lot-count").textContent = "กำลังโหลดล็อตและยอดคงเหลือ...";
   $("#lot-list").innerHTML = `<div class="loading-state stock-loading" role="status"><span class="spinner"></span> กำลังตรวจยอดสินค้าและประวัติการเคลื่อนไหว...</div>`;
   try {
-    const [{ lots }, { activities }, { locations }] = await Promise.all([api("/api/lots"), api("/api/activities"), api("/api/storage-locations")]);
+    const [{ lots }, { activities }, { locations }, {definitions},{allocations}] = await Promise.all([api("/api/lots"), api("/api/activities"), api("/api/storage-locations"),api("/api/standard-definitions"),api("/api/allocations")]);
     state.lots = lots;
     state.activities = activities;
     state.storageLocations = locations;
+    state.standardDefinitions=definitions;
+    state.allocations=allocations;
     state.lotStock = Object.fromEntries(await Promise.all(lots.map(async (lot) => {
       try { return [lot.lotId, { status:"ready", ...(await api(`/api/lots/${encodeURIComponent(lot.lotId)}/stock`)) }]; }
       catch (error) { return [lot.lotId, { status:"error", error:error.message }]; }
     })));
+    state.lotStandards=Object.fromEntries(await Promise.all(lots.map(async(lot)=>{try{return[lot.lotId,await api(`/api/lots/${encodeURIComponent(lot.lotId)}/standard`)];}catch(error){return[lot.lotId,{error:error.message,history:[],current:null,availabilityEligible:null}];}})));
     renderLots();
   } catch (error) {
     $("#lot-count").textContent = "โหลดข้อมูลไม่สำเร็จ";
@@ -200,20 +207,39 @@ function renderStockPanel(lot) {
   </section>`;
 }
 
+function renderLotStandard(lot) {
+  const standard=state.lotStandards[lot.lotId];
+  if(standard?.error) return `<section class="lot-standard-row status-critical"><strong>อ่านผลมาตรฐานไม่ได้</strong><span>${escapeHtml(standard.error)}</span></section>`;
+  if(!state.standardDefinitions.length) return `<section class="lot-standard-row"><strong>มาตรฐานล็อต</strong><span class="status status-review">รอ ICS กำหนด</span><small>ยังไม่มีนิยาม T1/T2 หรือผลตรวจที่ผู้ดูแลอนุมัติ</small></section>`;
+  if(!standard?.current) return `<section class="lot-standard-row"><strong>มาตรฐานล็อต</strong><span class="status status-review">รอการตรวจ</span><small>มีนิยามแล้ว แต่ยังไม่มีเจ้าหน้าที่ยืนยันผลล็อตนี้</small><button class="text-button" data-set-standard="${escapeHtml(lot.lotId)}">บันทึกผล</button></section>`;
+  const blocked=["ON_HOLD","REJECTED"].includes(standard.current.status);
+  return `<section class="lot-standard-row"><strong>มาตรฐานล็อต</strong><span class="status ${blocked?"status-critical":"status-approved"}">${escapeHtml(standard.current.status)}</span><small>${blocked?"กันออกจากยอดพร้อมจัดสรร":"ใช้จัดสรรได้ตามยอดคงเหลือ"} · มีประวัติ ${standard.history.length} รายการ</small><button class="text-button" data-set-standard="${escapeHtml(lot.lotId)}">บันทึกผลใหม่</button></section>`;
+}
+
+function renderAllocations(lot){
+  const items=state.allocations.filter((x)=>x.lotId===lot.lotId);
+  return `<section class="allocation-panel"><header><div><strong>การจัดสรรสินค้า</strong><small>${items.length?`${items.length} รายการพร้อมผู้รับผิดชอบและผู้รับสินค้า`:"ยังไม่มีการจัดสรรจากล็อตนี้"}</small></div><button type="button" class="button secondary-button" data-create-allocation="${escapeHtml(lot.lotId)}">สร้างการจัดสรร</button></header>${items.length?`<div class="allocation-list">${items.map((x)=>`<article><div><strong>${escapeHtml(x.recipientName)}</strong><small>ผู้รับผิดชอบ ${escapeHtml(x.responsibleName)} · อ้างอิง ${escapeHtml(x.orderReference)}</small><small>หมดอายุ ${escapeHtml(formatDateTime(x.expiresAt))}</small></div><div><span class="status ${x.status==="ACTIVE"?"status-review":x.status==="SHIPPED"?"status-approved":"status-info"}">${escapeHtml(x.status)}</span><strong>${escapeHtml(formatQuantity(x.quantity,x.unit))}</strong>${x.status==="ACTIVE"?`<button class="text-button" data-allocation-action="release" data-allocation-id="${escapeHtml(x.allocationId)}">ปลดจอง</button><button class="text-button" data-allocation-action="ship" data-allocation-id="${escapeHtml(x.allocationId)}">ส่งสินค้า</button>`:""}</div></article>`).join("")}</div>`:""}</section>`;
+}
+
 function renderLots() {
   const statusLabel = { DRAFT:"ฉบับร่าง", IN_STOCK:"ในคลัง", RESERVED:"จองแล้ว", SHIPPED:"ส่งแล้ว", VOID:"ยกเลิก", RECALLED:"เรียกคืน" };
   $("#lot-count").textContent = `${state.lots.length} ล็อต`;
   $("#storage-count").textContent = `${state.storageLocations.length} แห่ง`;
   $("#storage-list").innerHTML = state.storageLocations.map((item) => `<article class="farmer-card"><div class="farmer-main"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml([item.locationType,item.zone,item.address].filter(Boolean).join(" · ") || "ไม่ระบุรายละเอียด")}</small></div><span class="status ${item.status === "ACTIVE" ? "status-clear" : "status-info"}">${item.status === "ACTIVE" ? "ใช้งาน" : "พักใช้งาน"}</span></div></article>`).join("") || `<div class="empty-state"><strong>ยังไม่มีสถานที่จัดเก็บ</strong><p>เพิ่มสถานที่ก่อนสร้างล็อตแรก</p></div>`;
-  $("#lot-list").innerHTML = state.lots.map((lot) => `<article class="lot-card"><div class="lot-summary"><div><span class="member-code">${escapeHtml(lot.lotId)}</span><h3>${escapeHtml(lot.crop)}</h3><p>${escapeHtml(lot.farmerName)} · ${escapeHtml(lot.plotName)} · ตั้งต้น ${escapeHtml(formatQuantity(lot.quantity, lot.unit))}</p><small>จัดเก็บ: ${escapeHtml(lot.storageLocationName || "ยังไม่ระบุ")} · เก็บเกี่ยว ${new Intl.DateTimeFormat("th-TH", { dateStyle:"medium" }).format(new Date(lot.harvestDate))}</small></div><div class="lot-actions"><span class="status ${["VOID","RECALLED"].includes(lot.inventoryStatus) ? "status-critical" : "status-clear"}">${statusLabel[lot.inventoryStatus]}</span><button class="text-button" data-move-storage="${escapeHtml(lot.lotId)}">เปลี่ยนที่จัดเก็บ</button><a class="text-button" href="/trace/${encodeURIComponent(lot.traceToken)}" target="_blank" rel="noopener">เปิดหน้าตรวจสอบ</a><a class="text-button" href="/api/lots/${encodeURIComponent(lot.lotId)}/qr.png">ดาวน์โหลด QR</a></div></div>${renderStockPanel(lot)}</article>`).join("") || `<div class="empty-state"><strong>ยังไม่มีล็อต</strong><p>ล็อตแรกสร้างได้จากรายการเก็บเกี่ยวที่อนุมัติและมีข้อมูลครบ</p></div>`;
+  $("#lot-list").innerHTML = state.lots.map((lot) => `<article class="lot-card"><div class="lot-summary"><div><span class="member-code">${escapeHtml(lot.lotId)}</span><h3>${escapeHtml(lot.crop)}</h3><p>${escapeHtml(lot.farmerName)} · ${escapeHtml(lot.plotName)} · ตั้งต้น ${escapeHtml(formatQuantity(lot.quantity, lot.unit))}</p><small>จัดเก็บ: ${escapeHtml(lot.storageLocationName || "ยังไม่ระบุ")} · เก็บเกี่ยว ${new Intl.DateTimeFormat("th-TH", { dateStyle:"medium" }).format(new Date(lot.harvestDate))}</small></div><div class="lot-actions"><span class="status ${["VOID","RECALLED"].includes(lot.inventoryStatus) ? "status-critical" : "status-clear"}">${statusLabel[lot.inventoryStatus]}</span><button class="text-button" data-move-storage="${escapeHtml(lot.lotId)}">เปลี่ยนที่จัดเก็บ</button><a class="text-button" href="/trace/${encodeURIComponent(lot.traceToken)}" target="_blank" rel="noopener">เปิดหน้าตรวจสอบ</a><a class="text-button" href="/api/lots/${encodeURIComponent(lot.lotId)}/qr.png">ดาวน์โหลด QR</a></div></div>${renderLotStandard(lot)}${renderStockPanel(lot)}${renderAllocations(lot)}</article>`).join("") || `<div class="empty-state"><strong>ยังไม่มีล็อต</strong><p>ล็อตแรกสร้างได้จากรายการเก็บเกี่ยวที่อนุมัติและมีข้อมูลครบ</p></div>`;
   const harvests = state.activities.filter((x) => x.activityType?.trim().toLocaleLowerCase("th-TH").includes("เก็บเกี่ยว") && x.riskStatus === "APPROVED" && x.harvestAmount && x.harvestUnit && x.crop && x.plotName && !x.createdLotId);
   $("#harvest-list").innerHTML = harvests.map((item) => `<article class="farmer-card"><div class="farmer-main"><span class="farmer-mark">${escapeHtml(initials(item.farmerName))}</span><div><strong>${escapeHtml(item.farmerName)} · ${escapeHtml(item.crop)}</strong><small>${escapeHtml(item.plotName)} · ${escapeHtml(item.harvestAmount)} ${escapeHtml(item.harvestUnit)}</small></div><button class="button secondary-button" data-create-lot="${escapeHtml(item.activityId)}">สร้างล็อต</button></div></article>`).join("") || `<div class="empty-state"><strong>ยังไม่มีกิจกรรมที่พร้อมสร้างล็อต</strong><p>ตรวจและอนุมัติกิจกรรมเก็บเกี่ยวที่มีพืช แปลง ปริมาณ และหน่วยครบก่อน</p></div>`;
 }
 
-function renderReports() {
-  const { summary } = state.dashboard;
-  const farmers = new Set(state.activities.map((x) => x.farmerId)).size;
-  $("#report-grid").innerHTML = `<article class="metric"><span>กิจกรรมทั้งหมด</span><strong>${state.activities.length}</strong><small>รายการที่โหลดในทะเบียน</small></article><article class="metric"><span>เกษตรกรที่มีรายการ</span><strong>${farmers}</strong><small>นับจากกิจกรรม</small></article><article class="metric"><span>รอตรวจสอบ</span><strong>${summary.pendingReview}</strong><small>ต้องดำเนินการ</small></article><article class="metric"><span>ล็อตในคลัง</span><strong>${summary.lotsInStock}</strong><small>พร้อมส่งต่อ</small></article>`;
+async function loadImpactReport() {
+  $("#impact-content").innerHTML=`<div class="loading-state" role="status"><span class="spinner"></span> กำลังคำนวณตัวชี้วัด...</div>`;
+  try {
+    const data=await api("/api/reports/impact");
+    $("#impact-measured-at").textContent=`วัดจากข้อมูล ณ ${formatDateTime(data.measuredAt)}`;
+    const metrics=[["กิจกรรมทั้งหมด",data.activities.total,"รายการ"],["ข้อมูลบังคับไม่ครบ",data.activities.missingRequired,"รายการ"],["รอตรวจสอบ",data.activities.pendingReview,"รายการ"],["แก้ไขซ้ำ",data.activities.reworkCount,"ครั้ง"],["ข้อมูลนำเข้าซ้ำ",data.imports.duplicateRows,"แถว"],["ข้อผิดพลาดนำเข้า",data.imports.errorRows,"แถว"],["ปัญหายอดคลัง",data.inventory.reconciliationIssues,"ล็อต"],["เวลาตรวจค่ากลาง",data.activities.medianReviewMinutes??"ยังวัดไม่ได้",data.activities.medianReviewMinutes===null?"ยังไม่มีรายการที่ตรวจเสร็จ":"นาที"]];
+    $("#impact-content").innerHTML=`<div class="impact-grid">${metrics.map(([label,value,unit])=>`<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(unit)}</small></article>`).join("")}</div><div class="baseline-notice"><strong>ยังไม่มี baseline กระบวนการเดิม</strong><p>ระบบจึงแสดงเฉพาะจำนวนและเวลาที่วัดได้จริง และยังไม่สรุปเปอร์เซ็นต์ว่าดีขึ้นเท่าใด</p></div>`;
+    $("#report-grid").innerHTML="";
+  } catch(error) { $("#impact-content").innerHTML=`<div class="empty-state"><strong>คำนวณผลไม่ได้</strong><p>${escapeHtml(error.message)}</p><button class="button secondary-button" data-retry-impact>ลองใหม่</button></div>`; }
 }
 
 const importStatusMeta = {
@@ -256,11 +282,22 @@ function bestHeader(headers, candidates) {
 
 function setMappingOptions(headers) {
   const options = `<option value="">เลือกคอลัมน์...</option>${headers.map((header) => `<option value="${escapeHtml(header)}">${escapeHtml(header)}</option>`).join("")}`;
-  $("#map-member-code").innerHTML = options;
-  $("#map-display-name").innerHTML = options;
-  $("#map-member-code").value = bestHeader(headers, ["member_code", "membercode", "farmer_id", "รหัสสมาชิก", "รหัสเกษตรกร"]);
-  $("#map-display-name").value = bestHeader(headers, ["display_name", "displayname", "full_name", "name", "ชื่อเกษตรกร", "ชื่อ-นามสกุล", "ชื่อ"]);
+  const type=$("#import-entity-type").value;
+  $("#import-mapping-fields").innerHTML=importFieldConfig[type].map(([field,label,required])=>`<label><span>${escapeHtml(label)}${required?' <strong aria-label="จำเป็น">*</strong>':''}</span><select data-map-field="${field}" ${required?'required':''}>${options}</select></label>`).join("");
+  const suggestions=type==="FARMER"?{memberCode:["member_code","membercode","farmer_id","รหัสสมาชิก","รหัสเกษตรกร"],displayName:["display_name","displayname","full_name","name","ชื่อเกษตรกร","ชื่อ"]}:{plotId:["plot_id","plotid","รหัสแปลง"],farmerId:["farmer_id","farmerid","รหัสเกษตรกร"],memberCode:["member_code","membercode","รหัสสมาชิก"],name:["plot_name","name","ชื่อแปลง"],crop:["crop","พืช","ชนิดพืช"]};
+  for(const [field,candidates] of Object.entries(suggestions)){const select=$(`[data-map-field="${field}"]`);if(select)select.value=bestHeader(headers,candidates);}
 }
+
+function currentImportMapping(){return Object.fromEntries($$("[data-map-field]",$("#import-mapping-fields")).map((select)=>[select.dataset.mapField,select.value]).filter(([,value])=>value));}
+
+async function loadImportWorkspace(){
+  try{const [templates]=await Promise.all([api("/api/import-mapping-templates"),loadImportReviews()]);state.importTemplates=templates.templates||[];renderImportTemplates();}
+  catch(error){$("#import-review-status").textContent=`โหลดคิวตรวจไม่ได้: ${error.message}`;}
+}
+function renderImportTemplates(){const type=$("#import-entity-type").value;const templates=state.importTemplates.filter((item)=>item.entityType===type);$("#import-template").innerHTML=`<option value="">ยังไม่ใช้แม่แบบ</option>${templates.map((item)=>`<option value="${escapeHtml(item.templateId)}">${escapeHtml(item.name)}</option>`).join("")}`;}
+
+async function loadImportReviews(){const filter=$("#import-review-filter").value;$("#import-review-status").textContent="กำลังโหลดคิวตรวจ...";const result=await api(`/api/imports?limit=50${filter?`&verificationStatus=${encodeURIComponent(filter)}`:''}`);state.importReviewBatches=result.batches||[];const details=await Promise.all(state.importReviewBatches.map(({batch})=>api(`/api/imports/${encodeURIComponent(batch.batchId)}`)));renderImportReviews(details.flatMap((detail)=>detail.rows.map((row)=>({batch:detail.batch,row}))));}
+function renderImportReviews(items){$("#import-review-status").textContent=items.length?`พบ ${new Intl.NumberFormat('th-TH').format(items.length)} รายการ`:"ไม่มีรายการในสถานะนี้";$("#import-review-list").innerHTML=items.map(({batch,row})=>{const data=row.normalizedData||{};const title=batch.entityType==="PLOT"?`${data.name||'ไม่ระบุแปลง'} · ${data.crop||'ไม่ระบุพืช'}`:`${data.memberCode||'ไม่ระบุรหัส'} · ${data.displayName||'ไม่ระบุชื่อ'}`;return `<article class="import-review-row"><div class="review-provenance"><strong>${escapeHtml(title)}</strong><span class="status ${row.verificationStatus==='VERIFIED'?'status-clear':row.verificationStatus==='REJECTED'?'status-critical':'status-review'}">${row.verificationStatus==='VERIFIED'?'ยืนยันแล้ว':row.verificationStatus==='REJECTED'?'ส่งกลับแล้ว':'รอตรวจ'}</span><dl><dt>ต้นทาง</dt><dd>${escapeHtml(batch.sourceName)} · แถว ${row.sourceRowNumber}</dd><dt>นำเข้าโดย</dt><dd>${escapeHtml(row.importedBy||batch.createdBy)} · ${row.importedAt?formatDateTime(row.importedAt):'ยังไม่ระบุเวลา'}</dd><dt>ข้อมูลปลายทาง</dt><dd>${escapeHtml(row.targetEntityId||'ยังไม่มี')}</dd>${row.reviewerId?`<dt>ตรวจโดย</dt><dd>${escapeHtml(row.reviewerId)} · ${formatDateTime(row.reviewedAt)}</dd><dt>เหตุผล</dt><dd>${escapeHtml(row.reviewReason||'—')}</dd>`:''}</dl></div><form class="import-review-actions" data-import-review data-batch-id="${escapeHtml(batch.batchId)}" data-row-id="${escapeHtml(row.importRowId)}"><label>เหตุผล<textarea name="reason" required minlength="5" maxlength="500" placeholder="อ้างอิงเอกสารหรือสิ่งที่ตรวจพบ"></textarea></label><div><button class="button secondary-button" name="decision" value="reject" type="submit">ส่งกลับแก้ไข</button><button class="button button-primary" name="decision" value="verify" type="submit">ยืนยันข้อมูล</button></div><p class="form-error" role="alert" hidden></p></form></article>`;}).join('')||`<div class="empty-state"><strong>ไม่มีงานค้าง</strong><p>เปลี่ยนตัวกรองเพื่อดูรายการที่ยืนยันหรือส่งกลับแล้ว</p></div>`;}
 
 async function parseImportFile(file) {
   const allowed = /\.(csv|xlsx)$/i;
@@ -311,7 +348,8 @@ function renderImportRows() {
   $("#import-result-rows").innerHTML = visible.map((row) => {
     const data = row.normalizedData || {};
     const issues = Array.isArray(row.issues) ? row.issues : [];
-    return `<tr><td data-label="แถว"><strong>${new Intl.NumberFormat("th-TH").format(row.sourceRowNumber)}</strong></td><td data-label="รหัสสมาชิก">${escapeHtml(data.memberCode || "—")}</td><td data-label="ชื่อเกษตรกร">${escapeHtml(data.displayName || "—")}</td><td data-label="ผลตรวจ">${importStatusBadge(row.rowStatus)}</td><td data-label="รายละเอียด / วิธีแก้" class="import-issue">${issues.length ? issues.map((issue) => `<span>${escapeHtml(issue.message)}</span>`).join("") : "ข้อมูลบังคับครบ พร้อมนำเข้า"}</td></tr>`;
+    const plot=state.importPreview?.batch?.entityType==="PLOT";
+    return `<tr><td data-label="แถว"><strong>${new Intl.NumberFormat("th-TH").format(row.sourceRowNumber)}</strong></td><td data-label="รหัสอ้างอิง">${escapeHtml(plot?(data.plotId||data.memberCode||data.farmerId||"—"):(data.memberCode||"—"))}</td><td data-label="ชื่อรายการ">${escapeHtml(plot?(data.name||"—"):(data.displayName||"—"))}${plot&&data.crop?`<small>${escapeHtml(data.crop)}</small>`:""}</td><td data-label="ผลตรวจ">${importStatusBadge(row.rowStatus)}</td><td data-label="รายละเอียด / วิธีแก้" class="import-issue">${issues.length ? issues.map((issue) => `<span>${escapeHtml(issue.message)}</span>`).join("") : "ข้อมูลบังคับครบ พร้อมนำเข้า"}</td></tr>`;
   }).join("");
   $("#import-results-empty").hidden = visible.length > 0;
   $(".import-table-wrap").hidden = visible.length === 0;
@@ -367,6 +405,12 @@ function renderOutbox({ messages, summary }) {
 
 function openEntityDialog(mode, farmerId, extra = {}) {
   state.formMode = { mode, farmerId, ...extra };
+  if(mode==="lot-standard"||mode==="allocation-create"||mode==="allocation-action"){
+    $("#entity-form-error").hidden=true;
+    $("#entity-dialog-title").textContent=mode==="lot-standard"?`บันทึกผลมาตรฐาน · ${extra.lotId}`:mode==="allocation-create"?`สร้างการจัดสรร · ${extra.lotId}`:`${extra.action==="ship"?"ส่งสินค้า":"ปลดจอง"} · ${extra.allocationId}`;
+    $("#entity-form-fields").innerHTML=mode==="lot-standard"?`<label>สถานะตามนิยามที่อนุมัติ<select name="definitionId" required><option value="">เลือกสถานะ...</option>${state.standardDefinitions.filter((x)=>x.active).map((x)=>`<option value="${escapeHtml(x.definitionId)}">${escapeHtml(x.code)} · ${escapeHtml(x.name)}</option>`).join("")}</select></label><label>หลักฐานอ้างอิง<input name="evidenceReference" required maxlength="500" placeholder="เลขเอกสารหรือลิงก์หลักฐาน"></label><label>เวลาที่ผลมีผล<input type="datetime-local" name="effectiveAt" required value="${new Date().toLocaleString("sv-SE",{timeZone:"Asia/Bangkok"}).slice(0,16).replace(" ","T")}"></label><label>เหตุผล<textarea name="reason" required minlength="5" maxlength="500"></textarea></label>`:mode==="allocation-create"?`<label>ปริมาณ (${escapeHtml(extra.unit)})<input type="number" name="quantity" min="0.000001" max="${escapeHtml(extra.maximum)}" step="any" required></label><label>ผู้รับผิดชอบ<input name="responsibleName" required minlength="2" maxlength="120"></label><label>ผู้รับสินค้า<input name="recipientName" required minlength="2" maxlength="120"></label><label>เลขอ้างอิงคำสั่งซื้อ<input name="orderReference" required maxlength="120"></label><label>เอกสารอ้างอิง<input name="documentReference" maxlength="200"></label><label>วันหมดอายุการจอง<input type="datetime-local" name="expiresAt" required></label><label>เหตุผล<textarea name="reason" required minlength="5" maxlength="500"></textarea></label>`:`<label>เหตุผล<textarea name="reason" required minlength="5" maxlength="500"></textarea></label>`;
+    $("#entity-dialog").showModal();$("#entity-form-fields input, #entity-form-fields select, #entity-form-fields textarea").focus();return;
+  }
   const isFarmer = mode === "farmer";
   const isLotStatus = mode === "lot-status";
   const isStorage = mode === "storage"; const isCreateLot=mode === "create-lot"; const isMoveStorage=mode === "move-storage"; const isStockMovement=mode === "stock-movement";
@@ -494,6 +538,7 @@ document.addEventListener("keydown", (event) => {
   }
 });
 document.addEventListener("click", (event) => { const trigger = event.target.closest("[data-activity-id]"); if (trigger) openActivity(trigger.dataset.activityId); });
+document.addEventListener("click", (event) => { if(event.target.closest("[data-retry-impact]")) loadImpactReport(); });
 document.addEventListener("click", (event) => {
   const viewTrigger = event.target.closest("[data-view]");
   if (viewTrigger) showView(viewTrigger.dataset.view);
@@ -516,6 +561,12 @@ document.addEventListener("click", (event) => {
     const maximum=type==="RESERVE"?balance.available:type==="RELEASE"?balance.reserved:balance.onHand;
     openEntityDialog("stock-movement",undefined,{lotId:lot.lotId,type,unit:lot.unit,maximum,reference:`dashboard:${lot.lotId}:${type}:${Date.now()}:${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`});
   }
+  const standardTrigger=event.target.closest("[data-set-standard]");
+  if(standardTrigger) openEntityDialog("lot-standard",undefined,{lotId:standardTrigger.dataset.setStandard});
+  const allocationCreate=event.target.closest("[data-create-allocation]");
+  if(allocationCreate){const balance=state.lotStock[allocationCreate.dataset.createAllocation]?.balance;if(balance)openEntityDialog("allocation-create",undefined,{lotId:allocationCreate.dataset.createAllocation,unit:balance.unit,maximum:balance.available});}
+  const allocationAction=event.target.closest("[data-allocation-action]");
+  if(allocationAction) openEntityDialog("allocation-action",undefined,{allocationId:allocationAction.dataset.allocationId,action:allocationAction.dataset.allocationAction});
 });
 async function loadLotStock(lotId, button) {
   if (button) button.disabled=true;
@@ -552,15 +603,16 @@ $("#entity-form").addEventListener("submit", async (event) => {
     const values = Object.fromEntries(new FormData(event.currentTarget));
     const isFarmer = state.formMode.mode === "farmer";
     const isLotStatus = state.formMode.mode === "lot-status";
-    const isStorage=state.formMode.mode === "storage"; const isCreateLot=state.formMode.mode === "create-lot"; const isMoveStorage=state.formMode.mode === "move-storage"; const isStockMovement=state.formMode.mode === "stock-movement";
+    const isStorage=state.formMode.mode === "storage"; const isCreateLot=state.formMode.mode === "create-lot"; const isMoveStorage=state.formMode.mode === "move-storage"; const isStockMovement=state.formMode.mode === "stock-movement"; const isLotStandard=state.formMode.mode==="lot-standard"; const isAllocationCreate=state.formMode.mode==="allocation-create"; const isAllocationAction=state.formMode.mode==="allocation-action";
     const stockQuantity=Number(values.quantity);
     if(isStockMovement && (!Number.isFinite(stockQuantity) || stockQuantity===0 || (state.formMode.type!=="ADJUST" && stockQuantity<0))) throw new Error(state.formMode.type === "ADJUST" ? "ปริมาณปรับยอดต้องไม่เป็นศูนย์" : "ปริมาณต้องมากกว่า 0");
-    const body = isFarmer ? values : isLotStatus ? { reason:values.reason, status:state.formMode.status } : isCreateLot ? {activityId:state.formMode.activityId,storageLocationId:values.storageLocationId} : isMoveStorage ? {storageLocationId:values.storageLocationId,reason:values.reason} : isStockMovement ? {type:state.formMode.type,quantity:stockQuantity,unit:state.formMode.unit,reason:values.reason,reference:state.formMode.reference} : isStorage ? values : { ...values, farmerId: state.formMode.farmerId };
-    const path=isFarmer?"/api/farmers":isLotStatus?`/api/lots/${encodeURIComponent(state.formMode.lotId)}/status`:isStorage?"/api/storage-locations":isCreateLot?"/api/lots":isMoveStorage?`/api/lots/${encodeURIComponent(state.formMode.lotId)}/storage`:isStockMovement?`/api/lots/${encodeURIComponent(state.formMode.lotId)}/stock-movements`:"/api/plots";
+    const reference=`dashboard:${Date.now()}:${crypto.randomUUID?.()||Math.random().toString(36).slice(2)}`;
+    const body = isFarmer ? values : isLotStatus ? { reason:values.reason, status:state.formMode.status } : isCreateLot ? {activityId:state.formMode.activityId,storageLocationId:values.storageLocationId} : isMoveStorage ? {storageLocationId:values.storageLocationId,reason:values.reason} : isStockMovement ? {type:state.formMode.type,quantity:stockQuantity,unit:state.formMode.unit,reason:values.reason,reference:state.formMode.reference} : isLotStandard?{definitionId:values.definitionId,reason:values.reason,evidenceReference:values.evidenceReference,effectiveAt:new Date(values.effectiveAt).toISOString()}:isAllocationCreate?{quantity:Number(values.quantity),unit:state.formMode.unit,responsibleName:values.responsibleName,recipientName:values.recipientName,orderReference:values.orderReference,...(values.documentReference?{documentReference:values.documentReference}:{}),expiresAt:new Date(values.expiresAt).toISOString(),reason:values.reason,reference}:isAllocationAction?{reason:values.reason,reference}:isStorage ? values : { ...values, farmerId: state.formMode.farmerId };
+    const path=isFarmer?"/api/farmers":isLotStatus?`/api/lots/${encodeURIComponent(state.formMode.lotId)}/status`:isStorage?"/api/storage-locations":isCreateLot?"/api/lots":isMoveStorage?`/api/lots/${encodeURIComponent(state.formMode.lotId)}/storage`:isStockMovement?`/api/lots/${encodeURIComponent(state.formMode.lotId)}/stock-movements`:isLotStandard?`/api/lots/${encodeURIComponent(state.formMode.lotId)}/standard-history`:isAllocationCreate?`/api/lots/${encodeURIComponent(state.formMode.lotId)}/allocations`:isAllocationAction?`/api/allocations/${encodeURIComponent(state.formMode.allocationId)}/${state.formMode.action}`:"/api/plots";
     await api(path, { method:(isLotStatus||isMoveStorage) ? "PATCH" : "POST", body:JSON.stringify(body) });
     $("#entity-dialog").close();
     showToast(isFarmer ? "เพิ่มเกษตรกรแล้ว" : isLotStatus ? "อัปเดตสถานะล็อตแล้ว" : isStorage ? "เพิ่มสถานที่จัดเก็บแล้ว" : isCreateLot ? "สร้างล็อตและบันทึกสถานที่แล้ว" : isMoveStorage ? "ย้ายสถานที่จัดเก็บแล้ว" : isStockMovement ? "บันทึกการเคลื่อนไหวและ Snapshot แล้ว" : "เพิ่มแปลงแล้ว");
-    if (isLotStatus||isStorage||isCreateLot||isMoveStorage) await loadLots(); else if(isStockMovement) await loadLotStock(state.formMode.lotId); else await loadFarmers();
+    if (isLotStatus||isStorage||isCreateLot||isMoveStorage||isLotStandard||isAllocationCreate||isAllocationAction) await loadLots(); else if(isStockMovement) await loadLotStock(state.formMode.lotId); else await loadFarmers();
   } catch (error) { errorElement.textContent = error.message; errorElement.hidden = false; }
   finally { submitButton.disabled = false; }
 });
@@ -586,19 +638,26 @@ $("#import-mapping-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const errorElement = $("#import-mapping-error");
   const button = $("#preview-import");
-  const memberCode = $("#map-member-code").value;
-  const displayName = $("#map-display-name").value;
+  const entityType=$("#import-entity-type").value;
+  const mapping=currentImportMapping();
   errorElement.hidden = true;
   if (!state.importParsed || !state.importFile) return;
-  if (memberCode === displayName) { errorElement.textContent = "รหัสสมาชิกและชื่อเกษตรกรต้องเลือกคนละคอลัมน์"; errorElement.hidden = false; return; }
+  const selected=Object.values(mapping);if(new Set(selected).size!==selected.length){errorElement.textContent="หนึ่งคอลัมน์จับคู่ได้เพียงหนึ่งช่องข้อมูล";errorElement.hidden=false;return;}
+  if(entityType==="PLOT"&&!mapping.farmerId&&!mapping.memberCode){errorElement.textContent="แปลงต้องอ้างอิงรหัสเกษตรกรหรือรหัสสมาชิก";errorElement.hidden=false;return;}
   button.disabled = true;
   button.textContent = "กำลังตรวจข้อมูล...";
   try {
-    state.importPreview = await api("/api/imports/preview", { method:"POST", body:JSON.stringify({ sourceName:state.importFile.name, sourceType:state.importParsed.sourceType, rows:state.importParsed.rows, mapping:{ memberCode, displayName } }) });
+    state.importPreview = await api("/api/imports/preview", { method:"POST", body:JSON.stringify({ sourceName:state.importFile.name, sourceType:state.importParsed.sourceType, entityType, rows:state.importParsed.rows, mapping }) });
     renderImportPreview();
   } catch (error) { errorElement.textContent = error.message; errorElement.hidden = false; }
   finally { button.disabled = false; button.textContent = "ตรวจข้อมูลก่อนนำเข้า"; }
 });
+$("#import-entity-type").addEventListener("change",()=>{renderImportTemplates();if(state.importParsed)setMappingOptions(state.importParsed.headers);});
+$("#import-template").addEventListener("change",(event)=>{const template=state.importTemplates.find((item)=>item.templateId===event.target.value);$("#import-template-name").value=template?.name||"";if(!template)return;for(const [field,header] of Object.entries(template.mapping)){const select=$(`[data-map-field="${field}"]`);if(select&&[...select.options].some((option)=>option.value===header))select.value=header;}});
+$("#save-import-template").addEventListener("click",async(event)=>{if(!state.importParsed)return showToast("เลือกไฟล์และจับคู่คอลัมน์ก่อน");const selected=$("#import-template").value;const existing=state.importTemplates.find((item)=>item.templateId===selected);const name=$("#import-template-name").value.trim();if(!name){$("#import-template-name").focus();return showToast("ระบุชื่อแม่แบบก่อนบันทึก");}event.currentTarget.disabled=true;try{const body={name,sourceName:state.importFile.name,entityType:$("#import-entity-type").value,headers:state.importParsed.headers,mapping:currentImportMapping()};const result=await api(selected?`/api/import-mapping-templates/${encodeURIComponent(selected)}`:"/api/import-mapping-templates",{method:selected?"PATCH":"POST",body:JSON.stringify(body)});if(existing)Object.assign(existing,result.template);else state.importTemplates.push(result.template);renderImportTemplates();$("#import-template").value=result.template.templateId;$("#import-template-name").value=result.template.name;showToast(selected?"อัปเดตแม่แบบแล้ว":"บันทึกแม่แบบแล้ว");}catch(error){showToast(error.message);}finally{event.currentTarget.disabled=false;}});
+$("#refresh-import-reviews").addEventListener("click",loadImportReviews);
+$("#import-review-filter").addEventListener("change",loadImportReviews);
+$("#import-review-list").addEventListener("submit",async(event)=>{const form=event.target.closest("[data-import-review]");if(!form)return;event.preventDefault();const submitter=event.submitter;const reason=new FormData(form).get("reason")?.trim();const error=$(".form-error",form);if(!reason||reason.length<5){error.textContent="ระบุเหตุผลอย่างน้อย 5 ตัวอักษร";error.hidden=false;return;}$$('button',form).forEach((button)=>button.disabled=true);error.hidden=true;try{await api(`/api/imports/${encodeURIComponent(form.dataset.batchId)}/rows/${encodeURIComponent(form.dataset.rowId)}/${submitter.value}`,{method:"POST",body:JSON.stringify({reason})});showToast(submitter.value==="verify"?"ยืนยันข้อมูลแล้ว":"ส่งกลับรายการแล้ว");await loadImportReviews();}catch(apiError){error.textContent=apiError.message;error.hidden=false;$$('button',form).forEach((button)=>button.disabled=false);}});
 $("#import-result-filter").addEventListener("change", renderImportRows);
 $("#commit-import").addEventListener("click", async (event) => {
   const reason = $("#import-reason").value.trim();
@@ -610,7 +669,7 @@ $("#commit-import").addEventListener("click", async (event) => {
   try {
     const result = await api(`/api/imports/${encodeURIComponent(batch.batchId)}/commit`, { method:"POST", body:JSON.stringify({ reason }) });
     state.importPreview.batch = result.batch || { ...batch, status:"COMMITTED" };
-    showToast(`นำเข้าสมาชิกสำเร็จ ${result.committedRows ?? batch.validRows} รายการ`);
+    showToast(`นำเข้า${batch.entityType==="PLOT"?"แปลง":"สมาชิก"}สำเร็จ ${result.committedRows ?? batch.validRows} รายการ`);
     $("#commit-import").textContent = "นำเข้าเรียบร้อยแล้ว";
     $("#import-reason").disabled = true;
   } catch (error) { showImportOperationError(error.message); event.currentTarget.disabled = false; }

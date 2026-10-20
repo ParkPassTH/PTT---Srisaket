@@ -48,4 +48,12 @@ describe("StockService",()=>{
     assert.equal(recalled.balance.recalled,true);
     await assert.rejects(()=>service.record({lotId:"LOT-STOCK",movementType:"SHIP",quantity:1,unit:"kg",actorId:"warehouse",reason:"blocked shipment",reference:"ship:blocked"}),/เรียกคืน/);
   });
+
+  it("excludes held or rejected lots from available stock",async()=>{
+    const {repository,service}=await fixture();
+    await service.receiveLot("LOT-STOCK","warehouse","receive:held");
+    await repository.appendLotStandardHistory({historyId:"STDH-HOLD",lotId:"LOT-STOCK",definitionId:"STD-HOLD",status:"ON_HOLD",actorId:"ics",reason:"awaiting investigation",evidenceReference:"inspection:1",effectiveAt:"2026-10-20T00:00:00.000Z",recordedAt:"2026-10-20T00:00:00.000Z"});
+    assert.equal((await service.getBalance("LOT-STOCK")).available,0);
+    await assert.rejects(()=>service.record({lotId:"LOT-STOCK",movementType:"RESERVE",quantity:1,unit:"kg",actorId:"warehouse",reason:"must be blocked",reference:"reserve:held"}),/พร้อมใช้|available/);
+  });
 });

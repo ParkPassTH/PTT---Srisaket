@@ -76,13 +76,13 @@
 
 - [x] T-351 ออกแบบ import batch/domain และ staging repository แยกจากข้อมูลใช้งานจริง — F-036, F-038
 - [x] T-352 รองรับ CSV/XLSX upload ไม่เกิน 2 MiB/500 แถว/50 คอลัมน์ พร้อมป้องกันชนิดไฟล์และ formula injection ในรายงาน — F-036
-- [-] T-353 ทำ column mapping/เดาหัวคอลัมน์และ API template พร้อม audit แล้ว; รอหน้าเลือกและบันทึก template — F-036
+- [x] T-353 ทำ column mapping/เดาหัวคอลัมน์และหน้าเลือก/บันทึก template พร้อม audit — F-036
 - [x] T-354 ทำ Import Preview สำหรับ FARMER แสดง valid/error/duplicate/skipped ก่อน commit พร้อม UI — F-036, F-037
-- [-] T-355 ตรวจ required fields, stable ID และ duplicate สำหรับ FARMER แล้ว; รอวันที่ หน่วย และ farmer–plot–lot สำหรับชนิดข้อมูลถัดไป — F-037
+- [-] T-355 ตรวจ required fields, stable ID, duplicate และ farmer–plot relation สำหรับ FARMER/PLOT แล้ว; รอ schema กิจกรรม/ล็อตหากขยาย import — F-037
 - [x] T-356 ทำ error report ดาวน์โหลดได้ พร้อมเลขแถว สาเหตุ และวิธีแก้ — F-037
 - [-] T-357 ทำ dry run, batch checksum, READY-only idempotent commit และ pre-commit void แล้ว; รอ compensating rollback หลัง commit — F-038
 - [x] T-358 เก็บ provenance, source row, importer, reviewer, imported_at และ verification status พร้อม audit — F-039
-- [-] T-359 เพิ่ม API list/filter/verify/reject สำหรับข้อมูลเดิมแล้ว; รอหน้า human review queue — F-039
+- [x] T-359 เพิ่ม API และหน้า human review queue สำหรับ list/filter/verify/reject พร้อม provenance — F-039
 - [ ] T-360 ทำ OCR-assisted staging หลัง CSV path ผ่าน โดยบังคับเทียบต้นฉบับ — F-109
 - [ ] T-361 ประเมิน legacy API/export หลังชุมชนยืนยันระบบและสิทธิ์ — F-110
 
@@ -98,10 +98,10 @@
 - [x] T-408 storage location registry/assignment/movement — Google Sheets, reusable selection และ audit — F-034
 - [x] T-409 ออกแบบและพัฒนา StockMovement แบบ append-only: RECEIVE/RESERVE/RELEASE/SHIP/ADJUST/RECALL พร้อม audit/backup — F-040
 - [x] T-410 คำนวณ on-hand, reserved, available จาก ledger และห้ามติดลบ — F-040, F-042
-- [ ] T-411 เพิ่มมาตรฐานล็อต T1/T2/ผ่าน/พักใช้ตาม controlled list ที่อนุมัติ — F-041
-- [-] T-412 ทำจอง/ปลดจอง/จ่ายพร้อมจำนวนและเหตุผลผ่านเว็บแล้ว; รอผู้รับผิดชอบและวันหมดอายุ — F-042
-- [ ] T-413 กันล็อต VOID/RECALLED/พักใช้/ไม่ผ่านมาตรฐานออกจาก available quantity — F-041, F-042
-- [-] T-414 เพิ่มหน้า lot ledger แสดงยอดคงเหลือ การจอง movement และเวลาล่าสุดแล้ว; รอสถานะมาตรฐานรวมใน timeline — F-040, F-041, F-042
+- [-] T-411 เพิ่ม framework controlled definitions และประวัติมาตรฐานล็อตแล้ว; รอ ICS อนุมัตินิยามจริง — F-041
+- [x] T-412 ทำ lifecycle จอง/ปลดจอง/จ่าย/หมดอายุ พร้อมผู้รับผิดชอบ ผู้รับสินค้า เอกสารอ้างอิง และวันหมดอายุ — F-042
+- [x] T-413 กันล็อต VOID/RECALLED/พักใช้/ไม่ผ่านมาตรฐานออกจาก available quantity — F-041, F-042
+- [x] T-414 เพิ่ม lot ledger แสดงยอดคงเหลือ การจอง movement เวลาล่าสุด และสถานะมาตรฐาน — F-040, F-041, F-042
 - [x] T-415 ทดสอบ reconciliation, idempotency, unit mismatch, over-reserve/release/ship และ recall — F-040
 
 ## Phase 5 — Operations และ Deployment
@@ -126,12 +126,12 @@
 - [x] T-608 troubleshooting guide
 - [ ] T-609 deployment verification checklist
 - [ ] T-610 final feature/task reconciliation
-- [ ] T-611 สร้าง Impact Dashboard จาก metric definitions ที่อนุมัติ ห้ามสร้างเปอร์เซ็นต์สมมติ — F-043
-- [ ] T-612 จัดทำ Process Map แบบ As-Is/To-Be พร้อม owner, handoff, pain point และ control — F-044
-- [ ] T-613 จัดทำ Test Report ระบุ input, expected, actual, pass/fail, defect และหลักฐาน — F-044
+- [x] T-611 สร้าง Impact Dashboard จากข้อมูลวัดจริงและแสดงว่าไม่มี baseline โดยไม่สร้างเปอร์เซ็นต์สมมติ — F-043
+- [x] T-612 จัดทำ Process Map แบบ As-Is/To-Be พร้อม owner, handoff, pain point และ control — F-044
+- [x] T-613 จัดทำ Test Report ระบุ input, expected, actual, pass/fail, defect และหลักฐาน — F-044
 - [ ] T-614 ทำ controlled pilot กลุ่มเล็กด้วย consent และ rollback criteria — F-044
 - [ ] T-615 เปรียบเทียบ baseline/after ด้วยชุดข้อมูลเดียวกันและรายงานข้อจำกัด — F-043, F-044
-- [ ] T-616 จัดชุดนำเสนอกรรมการ: Process Map, Working PoC, Test Report, Implementation Plan — F-044
+- [x] T-616 จัดชุดเอกสารนำเสนอกรรมการ: Process Map, Working PoC scope, Test Report และ Implementation/Pilot Plan — F-044
 
 ## Current Gate
 

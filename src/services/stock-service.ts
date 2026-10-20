@@ -22,7 +22,11 @@ export class StockService {
   async getBalance(lotId:string):Promise<StockBalance> {
     const lot=await this.repository.getLot(lotId);
     if(!lot) throw new HttpError(404,"LOT_NOT_FOUND","ไม่พบล็อตที่ค้นหา");
-    return deriveStockBalance(lotId,lot.unit,await this.repository.listStockMovements(lotId));
+    const balance=deriveStockBalance(lotId,lot.unit,await this.repository.listStockMovements(lotId));
+    const standards=await this.repository.listLotStandardHistory(lotId);
+    const current=[...standards].sort((a,b)=>b.effectiveAt.localeCompare(a.effectiveAt)||b.recordedAt.localeCompare(a.recordedAt))[0];
+    const unavailable=["VOID","RECALLED"].includes(lot.inventoryStatus)||Boolean(current&&["ON_HOLD","REJECTED"].includes(current.status));
+    return unavailable?{...balance,available:0,recalled:balance.recalled||lot.inventoryStatus==="RECALLED"}:balance;
   }
 
   async record(input:RecordStockMovementInput):Promise<{movement:StockMovement;balance:StockBalance;created:boolean}> {
@@ -41,6 +45,9 @@ export class StockService {
       throw new HttpError(400,"INVALID_STOCK_QUANTITY","ปริมาณต้องมากกว่า 0; เฉพาะ ADJUST เท่านั้นที่เป็นค่าลบได้");
     }
     const before=await this.getBalance(lot.lotId);
+    if(before.available===0 && ["RESERVE","SHIP"].includes(input.movementType) && ["VOID","RECALLED"].includes(lot.inventoryStatus)) {
+      throw new HttpError(409,"LOT_NOT_AVAILABLE","ล็อตถูกระงับหรือเรียกคืน จึงไม่สามารถจองหรือจ่ายออกได้");
+    }
     if(before.recalled && !["RELEASE","RECALL"].includes(input.movementType)) {
       throw new HttpError(409,"LOT_RECALLED","ล็อตถูกเรียกคืนแล้ว ไม่สามารถเคลื่อนไหวสินค้าเพิ่มได้");
     }

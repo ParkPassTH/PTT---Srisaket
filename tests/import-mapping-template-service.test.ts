@@ -2,10 +2,16 @@ import assert from "node:assert/strict";
 import { describe,it } from "node:test";
 import { MemoryRepository } from "../src/repositories/memory-repository.js";
 import { ImportMappingTemplateService } from "../src/services/import-mapping-template-service.js";
+import type { PlotImportMapping } from "../src/domain/types.js";
 
 const valid={name:"ทะเบียนสมาชิกเดิม",sourceName:"members.csv",entityType:"FARMER" as const,headers:["member_id","full_name","telephone"],mapping:{memberCode:"member_id",displayName:"full_name",phone:"telephone"}};
 
 describe("ImportMappingTemplateService",()=>{
+  it("supports reusable PLOT mappings with farmer references",async()=>{
+    const service=new ImportMappingTemplateService(new MemoryRepository());
+    const template=await service.create({name:"Plots",sourceName:"plots.csv",entityType:"PLOT",headers:["member","plot","crop"],mapping:{memberCode:"member",name:"plot",crop:"crop"}},"admin");
+    assert.equal(template.entityType,"PLOT");assert.equal((template.mapping as PlotImportMapping).name,"plot");
+  });
   it("creates, lists and updates a reusable audited mapping",async()=>{
     const repository=new MemoryRepository(); const service=new ImportMappingTemplateService(repository);
     const created=await service.create(valid,"admin-1");

@@ -14,7 +14,8 @@ const testConfig = loadConfig({
   ADMIN_EMAIL: "admin@example.com",
   ADMIN_PASSWORD: "secure-test-password",
   ALLOWED_ORIGINS: "http://localhost:3000",
-  PUBLIC_TRACE_ENABLED: "true"
+  PUBLIC_TRACE_ENABLED: "true",
+  CRON_SECRET: "test-cron-secret-at-least-32-characters"
 });
 
 describe("HTTP API", () => {
@@ -35,6 +36,16 @@ describe("HTTP API", () => {
     const response = await request(app).get("/health");
     assert.equal(response.status, 200);
     assert.equal(response.body.status, "ok");
+  });
+
+  it("protects and runs the background worker with a dedicated secret", async () => {
+    assert.equal((await request(app).post("/api/system/workers/process")).status,401);
+    assert.equal((await request(app).post("/api/system/workers/process").set("Authorization","Bearer wrong-secret")).status,401);
+    const response=await request(app).post("/api/system/workers/process").set("Authorization","Bearer test-cron-secret-at-least-32-characters");
+    assert.equal(response.status,200);
+    assert.equal(response.body.ok,true);
+    assert.equal(typeof response.body.outboxProcessed,"number");
+    assert.equal(typeof response.body.allocationsExpired,"number");
   });
 
   it("publishes security headers and a dependency-aware readiness result", async () => {
@@ -156,6 +167,16 @@ describe("HTTP API", () => {
     assert.equal(rejected.status,200);assert.equal(rejected.body.row.verificationStatus,"REJECTED");
   });
 
+  it("previews PLOT imports without production writes and commits valid references",async()=>{
+    const agent=request.agent(app);await agent.post("/api/auth/login").send({email:"admin@example.com",password:"secure-test-password"});
+    const preview=await agent.post("/api/imports/preview").send({sourceName:"plots.csv",entityType:"PLOT",rows:[{member_code:"M-TEST",plot_name:"แปลงนำเข้า",crop:"พืชทดสอบ"}]});
+    assert.equal(preview.status,201);assert.equal(preview.body.batch.status,"READY");
+    assert.equal((await agent.get("/api/farmers")).body.plots.length,1);
+    const committed=await agent.post(`/api/imports/${preview.body.batch.batchId}/commit`).send({reason:"ตรวจทะเบียนเจ้าของแปลงแล้ว"});
+    assert.equal(committed.status,200);assert.equal(committed.body.rows[0].verificationStatus,"PENDING");
+    assert.equal((await agent.get("/api/farmers")).body.plots.length,2);
+  });
+
   it("creates, lists and updates reusable import mapping templates",async()=>{
     const agent=request.agent(app); await agent.post("/api/auth/login").send({email:"admin@example.com",password:"secure-test-password"});
     const input={name:"Community members",sourceName:"members.csv",entityType:"FARMER",headers:["member_id","full_name"],mapping:{memberCode:"member_id",displayName:"full_name"}};
@@ -245,6 +266,22 @@ describe("HTTP API", () => {
     assert.equal(stock.status,200);
     assert.deepEqual({onHand:stock.body.balance.onHand,reserved:stock.body.balance.reserved,available:stock.body.balance.available},{onHand:1,reserved:0.4,available:0.6});
     assert.equal(stock.body.movements.length,2);
+  });
+
+  it("manages an auditable allocation lifecycle through the API",async()=>{
+    const agent=request.agent(app); await agent.post("/api/auth/login").send({email:"admin@example.com",password:"secure-test-password"});
+    await agent.post("/api/lots/LOT-TEST-001/stock-movements").send({type:"RECEIVE",quantity:1,unit:"กก.",reason:"รับเข้าจากการเก็บเกี่ยว",reference:"allocation-test:receive"});
+    const input={quantity:0.4,unit:"กก.",responsibleName:"เจ้าหน้าที่คลัง",recipientName:"กลุ่มผู้ซื้อ",orderReference:"ORDER-API-1",documentReference:"DOC-API-1",expiresAt:"2099-10-20T12:00:00.000Z",reason:"จองตามคำสั่งซื้อที่ยืนยันแล้ว",reference:"allocation-test:create"};
+    const created=await agent.post("/api/lots/LOT-TEST-001/allocations").send(input);
+    assert.equal(created.status,201); assert.equal(created.body.allocation.status,"ACTIVE"); assert.equal(created.body.balance.reserved,0.4);
+    const replay=await agent.post("/api/lots/LOT-TEST-001/allocations").send(input);
+    assert.equal(replay.status,200); assert.equal(replay.body.created,false);
+    const active=await agent.get("/api/allocations?status=ACTIVE&lotId=LOT-TEST-001");
+    assert.equal(active.status,200); assert.equal(active.body.allocations.length,1);
+    const released=await agent.post(`/api/allocations/${created.body.allocation.allocationId}/release`).send({reason:"ผู้รับสินค้ายกเลิกคำสั่งซื้อ",reference:"allocation-test:release"});
+    assert.equal(released.status,201); assert.equal(released.body.allocation.status,"RELEASED"); assert.equal(released.body.balance.reserved,0);
+    const expired=await agent.post("/api/system/allocations/process-expired");
+    assert.equal(expired.status,200); assert.equal(expired.body.processed,0);
   });
 
   it("rejects unsigned LINE webhook calls", async () => {

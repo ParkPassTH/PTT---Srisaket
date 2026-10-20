@@ -198,7 +198,7 @@
         </section>
 
         <section class="registry-panel import-workspace" aria-labelledby="import-file-title">
-          <header class="panel-head"><div><h2 id="import-file-title">เลือกไฟล์ต้นทาง</h2><p>รองรับ CSV หรือ Excel (.xlsx) สูงสุด 2 MB, 500 แถว และ 50 คอลัมน์</p></div></header>
+          <header class="panel-head"><div><h2 id="import-file-title">เลือกไฟล์ต้นทาง</h2><p>รองรับ CSV หรือ Excel (.xlsx) สูงสุด 2 MB, 500 แถว และ 50 คอลัมน์</p></div><label class="compact-field">ประเภทข้อมูล<select id="import-entity-type"><option value="FARMER">เกษตรกร</option><option value="PLOT">แปลงเกษตร</option></select></label></header>
           <div class="import-file-step">
             <label id="import-dropzone" class="file-dropzone" for="import-file">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0 4 4m-4-4L8 8M5 14v5h14v-5"/></svg>
@@ -213,8 +213,8 @@
         <section id="import-mapping-panel" class="registry-panel" aria-labelledby="import-mapping-title" hidden>
           <header class="panel-head"><div><h2 id="import-mapping-title">จับคู่คอลัมน์</h2><p>เลือกหัวคอลัมน์จากไฟล์ให้ตรงกับข้อมูลในทะเบียน</p></div><span id="import-source-summary" class="member-code"></span></header>
           <form id="import-mapping-form" class="mapping-form">
-            <label><span>รหัสสมาชิก <strong aria-label="จำเป็น">*</strong></span><select id="map-member-code" required><option value="">เลือกคอลัมน์...</option></select><small>ต้องไม่ซ้ำ และใช้ตัวอักษร ตัวเลข _ หรือ - จำนวน 2–30 ตัว</small></label>
-            <label><span>ชื่อเกษตรกร <strong aria-label="จำเป็น">*</strong></span><select id="map-display-name" required><option value="">เลือกคอลัมน์...</option></select><small>ชื่อที่ใช้แสดงในทะเบียนและหน้าตรวจสอบ</small></label>
+            <div class="template-toolbar"><label>แม่แบบคอลัมน์<select id="import-template"><option value="">ยังไม่ใช้แม่แบบ</option></select></label><label>ชื่อแม่แบบ<input id="import-template-name" maxlength="120" placeholder="เช่น แปลงจากทีมส่งเสริม"></label><button id="save-import-template" class="button secondary-button" type="button">บันทึกแม่แบบ</button></div>
+            <div id="import-mapping-fields" class="mapping-fields"></div>
             <div class="mapping-actions"><button id="reset-import" class="button secondary-button" type="button">เลือกไฟล์ใหม่</button><button id="preview-import" class="button button-primary" type="submit">ตรวจข้อมูลก่อนนำเข้า</button></div>
             <p id="import-mapping-error" class="form-error" role="alert" hidden></p>
           </form>
@@ -233,11 +233,18 @@
           <div class="import-decision"><label for="import-reason">เหตุผลการนำเข้า</label><textarea id="import-reason" minlength="5" maxlength="500" placeholder="เช่น นำเข้าทะเบียนสมาชิกจากไฟล์ที่ทีมส่งเสริมตรวจแล้ว"></textarea><p>ระบบจะบันทึกชื่อไฟล์ ผู้ดำเนินการ เวลา และผลตรวจไว้ใน Audit Trail</p></div>
           <div id="import-operation-error" class="operation-error" role="alert" hidden><strong>ยังดำเนินการไม่ได้</strong><p></p><button id="retry-import-operation" class="text-button" type="button">ลองอีกครั้ง</button></div>
         </section>
+
+        <section class="registry-panel import-review-queue" aria-labelledby="import-review-title">
+          <header class="panel-head"><div><h2 id="import-review-title">คิวตรวจข้อมูลที่นำเข้าแล้ว</h2><p>ยืนยันกับเอกสารต้นทาง หรือส่งกลับพร้อมเหตุผล โดยไม่แก้ข้อมูลเงียบ ๆ</p></div><div class="review-queue-tools"><select id="import-review-filter" aria-label="กรองสถานะการตรวจ"><option value="PENDING">รอตรวจ</option><option value="REJECTED">ส่งกลับแล้ว</option><option value="VERIFIED">ยืนยันแล้ว</option><option value="">ทั้งหมด</option></select><button id="refresh-import-reviews" class="button secondary-button" type="button">รีเฟรช</button></div></header>
+          <div id="import-review-status" class="import-inline-status" role="status" aria-live="polite">เปิดหน้านี้เพื่อโหลดคิวตรวจ</div>
+          <div id="import-review-list" class="import-review-list"></div>
+        </section>
       </div>
 
       <div id="reports-content" class="page-content" hidden>
         <section class="page-intro"><div><p class="eyebrow">หลักฐานและการส่งต่อ</p><h2>รายงาน</h2><p>สรุปจากข้อมูลจริงในระบบตามสิทธิ์ผู้ใช้งาน</p></div><a class="button button-primary download-link" href="/api/reports/activities.csv">ดาวน์โหลดกิจกรรม CSV</a></section>
         <section id="report-grid" class="metrics" aria-label="สรุปรายงาน"></section>
+        <section class="registry-panel impact-panel"><header class="panel-head"><div><h2>ผลที่วัดได้จากระบบ</h2><p id="impact-measured-at">กำลังอ่านข้อมูลจริง...</p></div><span class="status status-review">ยังไม่มี baseline</span></header><div id="impact-content" class="impact-content"><div class="loading-state" role="status"><span class="spinner"></span> กำลังคำนวณตัวชี้วัด...</div></div></section>
         <section class="registry-panel backup-panel"><header class="panel-head"><div><h2>สำรองและกู้คืนข้อมูล</h2><p>ไฟล์มี checksum สำหรับตรวจความเสียหาย และการกู้คืนจะรวมข้อมูลโดยไม่ลบรายการปัจจุบัน</p></div><a class="button button-primary download-link" href="/api/system/backup">ดาวน์โหลด Backup</a></header><div class="backup-form"><label>เลือกไฟล์ Backup JSON<input id="backup-file" type="file" accept="application/json,.json"></label><p id="backup-validation" class="muted" role="status">ระบบจะตรวจโครงสร้างและ checksum ก่อนเปิดให้กู้คืน</p><label>เหตุผลในการกู้คืน<textarea id="backup-reason" minlength="5" maxlength="500" placeholder="เช่น กู้ข้อมูลหลังตรวจพบแถวสูญหาย"></textarea></label><button id="restore-backup" class="button secondary-button" type="button" disabled>รวมข้อมูลจาก Backup</button></div></section>
         <section class="guide-panel"><h3>ข้อมูลในรายงาน</h3><p>ไฟล์ CSV ประกอบด้วยรหัสกิจกรรม เวลา เกษตรกร แปลง พืช ประเภทกิจกรรม ความเสี่ยง และสถานะประมวลผล เปิดด้วย Google Sheets หรือ Excel ได้</p></section>
       </div>

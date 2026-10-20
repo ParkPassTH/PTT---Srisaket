@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import ExcelJS from "exceljs";
-import type { Farmer, ImportBatch, ImportIssue, ImportRow } from "../domain/types.js";
+import type { Farmer, ImportBatch, ImportIssue, ImportRow, Plot } from "../domain/types.js";
 import { HttpError } from "../lib/http-error.js";
 import { createId } from "../lib/ids.js";
 import type { Repository } from "../repositories/repository.js";
@@ -10,8 +10,11 @@ const MAX_ROWS = 500;
 const MAX_COLUMNS = 50;
 const MAX_CELL_LENGTH = 500;
 const FARMER_FIELDS = ["memberCode", "displayName", "lineUserId", "status", "address", "phone", "registeredAt", "totalAreaRai"] as const;
+const PLOT_FIELDS = ["plotId","farmerId","memberCode","name","crop","status","areaRai","gpsLat","gpsLng"] as const;
 type FarmerField = typeof FARMER_FIELDS[number];
 type ImportMapping = Partial<Record<FarmerField, string>>;
+type PlotField = typeof PLOT_FIELDS[number];
+type PlotImportMapping = Partial<Record<PlotField,string>>;
 
 const aliases: Record<FarmerField, string[]> = {
   memberCode: ["membercode", "member_code", "farmer_id", "รหัสสมาชิก", "รหัสเกษตรกร"],
@@ -22,6 +25,10 @@ const aliases: Record<FarmerField, string[]> = {
   phone: ["phone", "telephone", "เบอร์โทร", "โทรศัพท์"],
   registeredAt: ["registeredat", "registered_at", "วันที่ลงทะเบียน"],
   totalAreaRai: ["totalarearai", "total_area_rai", "พื้นที่รวม", "พื้นที่รวมไร่"]
+};
+const plotAliases:Record<PlotField,string[]>={
+  plotId:["plotid","plot_id","รหัสแปลง"],farmerId:["farmerid","farmer_id","รหัสเกษตรกร"],memberCode:["membercode","member_code","รหัสสมาชิก"],
+  name:["name","plot_name","ชื่อแปลง"],crop:["crop","พืช","ชนิดพืช"],status:["status","สถานะ"],areaRai:["arearai","area_rai","พื้นที่ไร่"],gpsLat:["gpslat","gps_lat","latitude","ละติจูด"],gpsLng:["gpslng","gps_lng","longitude","ลองจิจูด"]
 };
 
 export interface ParsedImportFile {
@@ -45,11 +52,12 @@ export class ImportService {
   }
 
   async preview(
-    input: { sourceName: string; sourceType?: "CSV" | "XLSX" | undefined; rows: Record<string, unknown>[]; mapping?: ImportMapping | undefined },
+    input: { sourceName: string; sourceType?: "CSV" | "XLSX" | undefined; entityType?: "FARMER"|"PLOT"|undefined; rows: Record<string, unknown>[]; mapping?: Record<string,string> | undefined },
     actorId: string
   ) {
     if (!input.rows.length || input.rows.length > MAX_ROWS) throw new HttpError(400, "IMPORT_ROW_LIMIT", "ไฟล์ตัวอย่างต้องมี 1–500 แถว");
-    const mapping = input.mapping ?? {};
+    if(input.entityType==="PLOT") return this.previewPlots(input,actorId);
+    const mapping = (input.mapping ?? {}) as ImportMapping;
     validateMapping(mapping, input.rows);
     const normalized = input.rows.map((raw) => normalizeFarmer(raw, mapping));
     const checksum = createHash("sha256").update(JSON.stringify(canonical({ entityType:"FARMER", normalized }))).digest("hex");
@@ -101,6 +109,7 @@ export class ImportService {
     if (rows.length !== batch.totalRows || rows.some((row) => row.rowStatus !== "VALID" && row.rowStatus !== "COMMITTED")) {
       throw new HttpError(409, "IMPORT_ROWS_CHANGED", "ข้อมูล staging ไม่ตรงกับผล Preview กรุณาสร้าง Preview ใหม่");
     }
+    if(batch.entityType==="PLOT") return this.commitPlots(batch,rows,actorId,reason);
     const committedAt = new Date().toISOString();
     for (const row of rows) {
       const data = row.normalizedData as unknown as NormalizedFarmer;
@@ -188,9 +197,56 @@ export class ImportService {
     if (!batch) throw new HttpError(404, "IMPORT_BATCH_NOT_FOUND", "ไม่พบ Import batch");
     return batch;
   }
+
+  private async previewPlots(input:{sourceName:string;sourceType?:"CSV"|"XLSX"|undefined;rows:Record<string,unknown>[];mapping?:Record<string,string>|undefined},actorId:string) {
+    const mapping=(input.mapping??{}) as PlotImportMapping;
+    validatePlotMapping(mapping,input.rows);
+    const [farmers,plots]=await Promise.all([this.repository.listFarmers(),this.repository.listPlots()]);
+    const normalized=input.rows.map((raw)=>normalizePlot(raw,mapping));
+    const checksum=createHash("sha256").update(JSON.stringify(canonical({entityType:"PLOT",normalized}))).digest("hex");
+    const existing=await this.repository.getImportBatchByChecksum(checksum,"PLOT");
+    if(existing) return {batch:existing,rows:await this.repository.listImportRows(existing.batchId),reused:true};
+    const knownIds=new Set(plots.map((plot)=>plot.plotId.toLocaleLowerCase("en-US")));
+    const knownNames=new Set(plots.map((plot)=>`${plot.farmerId}\u0000${plot.name.toLocaleLowerCase("th-TH")}`));
+    const seen=new Set<string>(); const now=new Date().toISOString();
+    const staged:ImportRow[]=normalized.map((data,index)=>{
+      const issues=validatePlot(data);
+      const farmer=resolveFarmer(farmers,data.farmerId,data.memberCode);
+      if(!farmer) issues.push({field:data.farmerId?"farmerId":"memberCode",code:"FARMER_NOT_FOUND",message:"ไม่พบเกษตรกรอ้างอิงในทะเบียน"});
+      const idKey=data.plotId?`id:${data.plotId.toLocaleLowerCase("en-US")}`:"";const nameKey=farmer&&data.name?`name:${farmer.farmerId}\u0000${data.name.toLocaleLowerCase("th-TH")}`:"";
+      const duplicate=Boolean((idKey&&(seen.has(idKey)||knownIds.has(data.plotId.toLocaleLowerCase("en-US"))))||(nameKey&&(seen.has(nameKey)||knownNames.has(`${farmer!.farmerId}\u0000${data.name.toLocaleLowerCase("th-TH")}`))));
+      if(idKey)seen.add(idKey);if(nameKey)seen.add(nameKey);
+      if(duplicate) issues.push({field:data.plotId?"plotId":"name",code:"DUPLICATE",message:"แปลงซ้ำกับทะเบียนหรือแถวก่อนหน้า"});
+      return {importRowId:createId("IMR"),batchId:"",sourceRowNumber:index+2,rawData:safeRecord(input.rows[index]!),normalizedData:{...data,...(farmer?{resolvedFarmerId:farmer.farmerId}:{})},rowStatus:duplicate?"DUPLICATE":issues.length?"ERROR":"VALID",issues,verificationStatus:"NOT_REQUIRED",createdAt:now,updatedAt:now};
+    });
+    const batchId=createId("IMP"); staged.forEach((row)=>{row.batchId=batchId;});
+    const batch:ImportBatch={batchId,sourceName:input.sourceName,sourceType:input.sourceType??"CSV",entityType:"PLOT",checksum,status:staged.every((row)=>row.rowStatus==="VALID")?"READY":"PREVIEW",totalRows:staged.length,validRows:staged.filter((row)=>row.rowStatus==="VALID").length,errorRows:staged.filter((row)=>row.rowStatus==="ERROR").length,duplicateRows:staged.filter((row)=>row.rowStatus==="DUPLICATE").length,createdBy:actorId,createdAt:now,updatedAt:now};
+    await this.repository.saveImportBatch(batch); for(const row of staged) await this.repository.saveImportRow(row);
+    await this.repository.saveAuditEvent({auditId:createId("AUD"),entityType:"IMPORT_BATCH",entityId:batchId,actorId,action:"IMPORT_PREVIEW_CREATED",after:{batch,mapping},occurredAt:now});
+    return {batch,rows:staged,reused:false};
+  }
+
+  private async commitPlots(batch:ImportBatch,rows:ImportRow[],actorId:string,reason:string) {
+    const committedAt=new Date().toISOString();
+    for(const row of rows){
+      const data=row.normalizedData as unknown as NormalizedPlot;
+      const farmer=(data.resolvedFarmerId?await this.repository.getFarmer(data.resolvedFarmerId):undefined)??await this.repository.getFarmerByMemberCode(data.memberCode);
+      if(!farmer) throw new HttpError(409,"IMPORT_FARMER_CONFLICT",`ไม่พบเกษตรกรของแถว ${row.sourceRowNumber}`);
+      const existingPlots=await this.repository.listPlots(farmer.farmerId);
+      const plotId=data.plotId||deterministicPlotId(batch.batchId,row.sourceRowNumber);
+      if(await this.repository.getPlot(plotId)||existingPlots.some((plot)=>plot.name.toLocaleLowerCase("th-TH")===data.name.toLocaleLowerCase("th-TH"))) throw new HttpError(409,"IMPORT_PLOT_CONFLICT",`แปลงของแถว ${row.sourceRowNumber} ถูกสร้างหลัง Preview`);
+      const plot:Plot={plotId,farmerId:farmer.farmerId,name:data.name,crop:data.crop,status:data.status,...(data.areaRai!==undefined?{areaRai:data.areaRai}:{}),...(data.gpsLat!==undefined?{gpsLat:data.gpsLat}:{}),...(data.gpsLng!==undefined?{gpsLng:data.gpsLng}:{})};
+      await this.repository.savePlot(plot); row.rowStatus="COMMITTED";row.targetEntityId=plotId;row.importedBy=actorId;row.importedAt=committedAt;row.verificationStatus="PENDING";row.updatedAt=committedAt;await this.repository.saveImportRow(row);
+      await this.repository.saveAuditEvent({auditId:createId("AUD"),entityType:"PLOT",entityId:plotId,actorId,action:"IMPORT_CREATE",reason,after:plot,occurredAt:committedAt});
+    }
+    const committed:ImportBatch={...batch,status:"COMMITTED",updatedAt:committedAt};await this.repository.saveImportBatch(committed);
+    await this.repository.saveAuditEvent({auditId:createId("AUD"),entityType:"IMPORT_BATCH",entityId:batch.batchId,actorId,action:"IMPORT_COMMITTED",reason,before:{status:batch.status},after:{status:"COMMITTED",committedRows:rows.length},occurredAt:committedAt});
+    return {batch:committed,rows,committedRows:rows.length,reused:false};
+  }
 }
 
 interface NormalizedFarmer { memberCode:string; displayName:string; lineUserId:string; status:"ACTIVE"|"INACTIVE"; address:string; phone:string; registeredAt:string; totalAreaRai?:number; }
+interface NormalizedPlot { plotId:string;farmerId:string;memberCode:string;name:string;crop:string;status:"ACTIVE"|"INACTIVE";areaRai?:number;gpsLat?:number;gpsLng?:number;resolvedFarmerId?:string; }
 
 function normalizeFarmer(raw: Record<string, unknown>, mapping: ImportMapping): NormalizedFarmer {
   const read = (field: FarmerField) => {
@@ -221,6 +277,16 @@ function validateFarmer(data: NormalizedFarmer): ImportIssue[] {
   if (data.phone.length > 30) issues.push({ field:"phone", code:"MAX_LENGTH", message:"เบอร์โทรยาวเกิน 30 ตัวอักษร" });
   return issues;
 }
+
+function normalizePlot(raw:Record<string,unknown>,mapping:PlotImportMapping):NormalizedPlot{
+  const read=(field:PlotField)=>{const mapped=mapping[field];if(mapped)return raw[mapped];const wanted=new Set(plotAliases[field]);const key=Object.keys(raw).find((candidate)=>wanted.has(normalizeHeader(candidate)));return key?raw[key]:undefined;};
+  const number=(field:PlotField)=>{const value=text(read(field)).replace(/,/g,"");return value?Number(value):undefined;};
+  const areaRai=number("areaRai"),gpsLat=number("gpsLat"),gpsLng=number("gpsLng");
+  return {plotId:text(read("plotId")),farmerId:text(read("farmerId")),memberCode:text(read("memberCode")),name:text(read("name")),crop:text(read("crop")),status:text(read("status")).toUpperCase()==="INACTIVE"?"INACTIVE":"ACTIVE",...(areaRai!==undefined?{areaRai}:{}),...(gpsLat!==undefined?{gpsLat}:{}),...(gpsLng!==undefined?{gpsLng}:{})};
+}
+function validatePlot(data:NormalizedPlot):ImportIssue[]{const issues:ImportIssue[]=[];if(!data.farmerId&&!data.memberCode)issues.push({field:"memberCode",code:"REQUIRED",message:"ต้องมี farmerId หรือ memberCode"});if(!data.name)issues.push({field:"name",code:"REQUIRED",message:"ไม่มีชื่อแปลง"});if(!data.crop)issues.push({field:"crop",code:"REQUIRED",message:"ไม่มีชนิดพืช"});if(data.plotId&&!/^[A-Za-z0-9_-]{2,50}$/.test(data.plotId))issues.push({field:"plotId",code:"FORMAT",message:"รหัสแปลงใช้ได้เฉพาะตัวอักษร ตัวเลข _ -"});if(data.areaRai!==undefined&&(!Number.isFinite(data.areaRai)||data.areaRai<0))issues.push({field:"areaRai",code:"NUMBER",message:"พื้นที่ต้องเป็นเลขตั้งแต่ 0 ขึ้นไป"});if(data.gpsLat!==undefined&&(!Number.isFinite(data.gpsLat)||data.gpsLat < -90||data.gpsLat>90))issues.push({field:"gpsLat",code:"RANGE",message:"ละติจูดต้องอยู่ระหว่าง -90 ถึง 90"});if(data.gpsLng!==undefined&&(!Number.isFinite(data.gpsLng)||data.gpsLng < -180||data.gpsLng>180))issues.push({field:"gpsLng",code:"RANGE",message:"ลองจิจูดต้องอยู่ระหว่าง -180 ถึง 180"});return issues;}
+function validatePlotMapping(mapping:PlotImportMapping,rows:Record<string,unknown>[]){const unknown=Object.keys(mapping).filter((key)=>!PLOT_FIELDS.includes(key as PlotField));if(unknown.length)throw new HttpError(400,"IMPORT_MAPPING_FIELD","mapping มีฟิลด์ที่ไม่รองรับ",{fields:unknown});const headers=new Set(rows.flatMap((row)=>Object.keys(row)));const missing=Object.values(mapping).filter((header):header is string=>Boolean(header)&&!headers.has(header));if(missing.length)throw new HttpError(400,"IMPORT_MAPPING_HEADER","ไม่พบคอลัมน์ต้นทางตาม mapping",{headers:missing});}
+function resolveFarmer(farmers:Farmer[],farmerId:string,memberCode:string){const byId=farmerId?farmers.find((farmer)=>farmer.farmerId===farmerId):undefined;const byCode=memberCode?farmers.find((farmer)=>farmer.memberCode.toLocaleLowerCase("en-US")===memberCode.toLocaleLowerCase("en-US")):undefined;if(byId&&byCode&&byId.farmerId!==byCode.farmerId)return undefined;return byId??byCode;}
 
 function validateMapping(mapping: ImportMapping, rows: Record<string, unknown>[]) {
   const unknown = Object.keys(mapping).filter((key) => !FARMER_FIELDS.includes(key as FarmerField));
@@ -314,5 +380,6 @@ function normalizeDate(value:unknown){if(value instanceof Date)return value.toIS
 function text(value:unknown){const result=value===null||value===undefined?"":String(value).trim();if(result.length>MAX_CELL_LENGTH)throw new HttpError(400,"IMPORT_CELL_TOO_LONG",`ข้อมูลในหนึ่งช่องต้องไม่เกิน ${MAX_CELL_LENGTH} ตัวอักษร`);return result;}
 function safeRecord(value:Record<string,unknown>){return Object.fromEntries(Object.entries(value).map(([key,item])=>[key,text(item)]));}
 function deterministicFarmerId(batchId:string,row:number){return `FARM-IMP-${createHash("sha256").update(`${batchId}:${row}`).digest("hex").slice(0,24)}`;}
+function deterministicPlotId(batchId:string,row:number){return `PLOT-IMP-${createHash("sha256").update(`${batchId}:${row}`).digest("hex").slice(0,24)}`;}
 function csvCell(value:string){const protectedValue=/^[=+\-@\t\r]/.test(value)?`'${value}`:value;return `"${protectedValue.replace(/"/g,'""')}"`;}
 function canonical(value:unknown):unknown{if(Array.isArray(value))return value.map(canonical);if(value&&typeof value==="object")return Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,item])=>[key,canonical(item)]));return value;}

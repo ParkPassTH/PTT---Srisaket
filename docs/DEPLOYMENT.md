@@ -53,6 +53,7 @@ npm audit --omit=dev
 | `APP_BASE_URL` | ใช่ | URL จริง เช่น `https://example.onrender.com` |
 | `DATA_DRIVER` | ใช่ | ใช้ `google-sheets` สำหรับ production/pilot; `memory` สำหรับ demo เท่านั้น |
 | `SESSION_SECRET` | ใช่ | random อย่างน้อย 32 ตัวอักษร |
+| `CRON_SECRET` | ใช่สำหรับงานอัตโนมัติ | secret คนละค่ากับ session อย่างน้อย 32 ตัวอักษร ใช้เฉพาะ worker |
 | `ADMIN_EMAIL` | ใช่ | อีเมล admin เริ่มต้น |
 | `ADMIN_PASSWORD` | ใช่ | รหัสยาวและไม่ซ้ำบริการอื่น |
 | `LINE_CHANNEL_SECRET` | เมื่อเปิด LINE | secret จาก LINE Developers Console |
@@ -126,3 +127,14 @@ https://YOUR-VERCEL-DOMAIN/webhooks/line
 ```
 
 Vercel Function รองรับ Gate A–C แล้ว ตั้ง `maxDuration=60`; ต้องใช้ `DATA_DRIVER=google-sheets` เพื่อให้ข้อมูลคงอยู่ข้ามการสร้าง function ใหม่
+
+## Scheduled worker บนโฮสต์ฟรี
+
+ตั้ง `CRON_SECRET` ใน Environment Variables แล้วสร้างงานในบริการ cron ภายนอก เช่น cron-job.org ให้เรียกทุก 5 นาที:
+
+```text
+GET https://<your-domain>/api/system/workers/process
+Authorization: Bearer <CRON_SECRET>
+```
+
+endpoint นี้ประมวลผล outbox ที่ถึงกำหนดและปลดจอง allocation ที่หมดอายุในรอบเดียว มี idempotency และ audit trail ห้ามใส่ secret ใน URL หรือ commit ลง repository ทดสอบสำเร็จต้องได้ `200` พร้อม `outboxProcessed`, `allocationsExpired` และ `processedAt`; ถ้าได้ `401` ให้ตรวจ header และถ้าได้ `503 WORKER_NOT_CONFIGURED` ให้ตั้งค่าแล้ว redeploy

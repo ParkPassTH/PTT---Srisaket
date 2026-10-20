@@ -54,15 +54,15 @@
 | F-033 | จับคู่แปลงอัตโนมัติจากทะเบียน | เกษตรกร/ICS | Implemented | รองรับรหัส ชื่อ “แปลง 1/แปลงหนึ่ง” และเลือกแปลงเดียวอัตโนมัติ พร้อมเติมพืชจากทะเบียน |
 | F-034 | ทะเบียนสถานที่จัดเก็บและประวัติย้ายล็อต | Warehouse/Admin | Done | เลือกสถานที่เดิมเมื่อสร้างล็อต เพิ่มสถานที่ใหม่ และย้ายพร้อมเหตุผล/snapshot ก่อน–หลัง |
 | F-035 | สำรวจแหล่งข้อมูลเดิมและ Data Contract | เจ้าหน้าที่/ผู้ดูแลข้อมูล | Planned | ยืนยันว่าเอกสารอยู่ที่ใคร รูปแบบใด เจ้าของข้อมูลและสิทธิ์ใช้งาน พร้อม sample ที่ปกปิดข้อมูล |
-| F-036 | CSV/XLSX Import Preview และ Column Mapping | เจ้าหน้าที่นำเข้า | In Progress | อัปโหลด/parse/mapping/preview UI และ API template ใช้ซ้ำพร้อม; รอหน้าเลือก/บันทึก template และชนิดข้อมูลแปลง/ล็อต |
-| F-037 | Data Quality Check และ Error Report | เจ้าหน้าที่/ICS | In Progress | ตรวจ required/format/duplicate และดาวน์โหลด error CSV รายแถวพร้อม; รอกฎวันที่ หน่วย และความสัมพันธ์สำหรับชนิดข้อมูลอื่น |
+| F-036 | CSV/XLSX Import Preview และ Column Mapping | เจ้าหน้าที่นำเข้า | In Progress | FARMER/PLOT อัปโหลด, mapping, preview และ template ใช้ซ้ำผ่าน UI แล้ว; ชนิดข้อมูลกิจกรรม/ล็อตยังไม่อยู่ใน MVP import |
+| F-037 | Data Quality Check และ Error Report | เจ้าหน้าที่/ICS | In Progress | FARMER/PLOT ตรวจ required/format/duplicate/owner reference และดาวน์โหลด error CSV แล้ว; กฎวันที่/หน่วยของกิจกรรมและล็อตยังรอนิยาม |
 | F-038 | Controlled Import, Idempotency และ Rollback | Admin | In Progress | dry run, checksum, READY-only idempotent commit และ void ก่อน commit พร้อม audit; รอ compensating rollback หลัง commit |
-| F-039 | Provenance และสถานะตรวจทานข้อมูลเดิม | ICS/Auditor | In Progress | เก็บ batch/source row/importer/time และ PENDING/VERIFIED/REJECTED พร้อม reviewer/reason/audit แล้ว; รอหน้าคิวตรวจข้อมูลนำเข้า |
+| F-039 | Provenance และสถานะตรวจทานข้อมูลเดิม | ICS/Auditor | Done | มี Review Queue, provenance, filter และยืนยัน/ส่งกลับพร้อม reviewer, เวลา, เหตุผล และ audit |
 | F-040 | Stock Movement Ledger และยอดคงเหลือ | Warehouse/ICS | Done | append-only ledger พร้อมหน้าเว็บดูยอด/ประวัติและทำ RESERVE/RELEASE/SHIP/ADJUST/RECALL, idempotency, audit และ backup |
-| F-041 | สถานะมาตรฐาน T1/T2/ผ่าน/พักใช้ | ICS | Planned | ใช้รายการสถานะที่ผู้รับผิดชอบ ICS อนุมัติ พร้อมเหตุผล วันมีผล และประวัติเปลี่ยนแปลง |
-| F-042 | Lot Allocation และ Available Quantity | Warehouse | In Progress | หน้าเว็บจอง/ปลดจอง/จ่ายและคำนวณ on-hand/reserved/available พร้อมกัน RECALL แล้ว; รอผู้รับผิดชอบ วันหมดอายุ และกฎสถานะมาตรฐาน |
-| F-043 | Impact Dashboard | ผู้จัดการ/กรรมการ | Planned | แสดงเวลาทำงาน ข้อมูลขาด รายการซ้ำ งานแก้ และความคลาดเคลื่อนล็อตจากข้อมูลวัดจริงก่อน–หลัง |
-| F-044 | PoC Evidence Pack และ Pilot Measurement | กรรมการ/ทีมโครงการ | Planned | มี Process Map, Working PoC, Test Report expected-vs-actual และ Implementation/Pilot Plan ที่ตรวจย้อนกลับได้ |
+| F-041 | สถานะมาตรฐาน T1/T2/ผ่าน/พักใช้ | ICS | In Progress | มี controlled definitions และ append-only history พร้อมเหตุผล/หลักฐาน/วันมีผล; รอนิยามจริงที่ ICS อนุมัติ |
+| F-042 | Lot Allocation และ Available Quantity | Warehouse | Implemented | lifecycle จอง/ปลด/ส่ง/หมดอายุ เก็บผู้รับผิดชอบ ผู้รับสินค้า เอกสารอ้างอิง และ audit; ล็อต VOID/RECALLED/ON_HOLD/REJECTED ไม่มี available |
+| F-043 | Impact Dashboard | ผู้จัดการ/กรรมการ | In Progress | แสดง metric ที่วัดจากข้อมูลจริงและบอกชัดว่ายังไม่มี baseline; รอเก็บ baseline/pilot จริงเพื่อเทียบก่อน–หลัง |
+| F-044 | PoC Evidence Pack และ Pilot Measurement | กรรมการ/ทีมโครงการ | In Progress | จัดทำ Process Map, Test Report template, Deployment checklist, Runbook และ Pilot Plan แล้ว; รอ controlled pilot และหลักฐาน actual |
 
 ## P1 — ควรมีหลังแกนหลักเสถียร
 

@@ -12,10 +12,13 @@ const entitySchema = z.object({
   reviews:z.array(record({ reviewId:z.string().min(1), activityId:z.string().min(1), reviewerId:z.string().min(1), decision:z.string(), reason:z.string(), reviewedAt:z.string() })),
   lots:z.array(record({ lotId:z.string().min(1), activityId:z.string().min(1), farmerId:z.string().min(1), traceToken:z.string().min(1), inventoryStatus:z.string() })),
   stockMovements:z.array(record({ movementId:z.string().min(1), lotId:z.string().min(1), movementType:z.string(), quantity:z.number(), unit:z.string().min(1), reference:z.string().min(1) })).default([]),
+  allocationEvents:z.array(record({eventId:z.string().min(1),allocationId:z.string().min(1),lotId:z.string().min(1),eventType:z.enum(["ALLOCATE","RELEASE","SHIP","EXPIRE"]),quantity:z.number(),unit:z.string().min(1),reference:z.string().min(1)})).default([]),
+  lotStandardDefinitions:z.array(record({definitionId:z.string().min(1),code:z.enum(["T1","T2","PASSED","ON_HOLD","REJECTED"]),name:z.string().min(1)})).default([]),
+  lotStandardHistory:z.array(record({historyId:z.string().min(1),lotId:z.string().min(1),definitionId:z.string().min(1),status:z.enum(["T1","T2","PASSED","ON_HOLD","REJECTED"])})).default([]),
   storageLocations:z.array(record({ locationId:z.string().min(1), name:z.string().min(1), status:z.enum(["ACTIVE","INACTIVE"]) })).default([]),
   importBatches:z.array(record({batchId:z.string().min(1),checksum:z.string().min(1),status:z.string()})).default([]),
   importRows:z.array(record({importRowId:z.string().min(1),batchId:z.string().min(1),rowStatus:z.string()})).default([]),
-  importMappingTemplates:z.array(record({templateId:z.string().min(1),name:z.string().min(1),sourceName:z.string().min(1),entityType:z.literal("FARMER"),headers:z.array(z.string()),mapping:z.record(z.string())})).default([]),
+  importMappingTemplates:z.array(record({templateId:z.string().min(1),name:z.string().min(1),sourceName:z.string().min(1),entityType:z.enum(["FARMER","PLOT"]),headers:z.array(z.string()),mapping:z.record(z.string())})).default([]),
   auditEvents:z.array(record({ auditId:z.string().min(1), entityType:z.string(), entityId:z.string().min(1), actorId:z.string().min(1), action:z.string(), occurredAt:z.string() })),
   outbox:z.array(record({ messageId:z.string().min(1), channel:z.literal("LINE"), recipient:z.string().min(1), body:z.string(), status:z.string(), attempts:z.number(), maxAttempts:z.number() }))
 });
@@ -26,12 +29,12 @@ export class BackupService {
   constructor(private readonly repository: Repository) {}
 
   async export() {
-    const [farmers,plots,activities,reviews,lots,stockMovements,storageLocations,importBatches,importMappingTemplates,auditEvents,outbox] = await Promise.all([
+    const [farmers,plots,activities,reviews,lots,stockMovements,allocationEvents,lotStandardDefinitions,lotStandardHistory,storageLocations,importBatches,importMappingTemplates,auditEvents,outbox] = await Promise.all([
       this.repository.listFarmers(), this.repository.listPlots(), this.repository.listActivities(), this.repository.listAllReviews(),
-      this.repository.listLots(), this.repository.listStockMovements(), this.repository.listStorageLocations(), this.repository.listImportBatches(), this.repository.listImportMappingTemplates(), this.repository.listAllAuditEvents(), this.repository.listOutbox()
+      this.repository.listLots(), this.repository.listStockMovements(), this.repository.listAllocationEvents(), this.repository.listLotStandardDefinitions(), this.repository.listLotStandardHistory(), this.repository.listStorageLocations(), this.repository.listImportBatches(), this.repository.listImportMappingTemplates(), this.repository.listAllAuditEvents(), this.repository.listOutbox()
     ]);
     const importRows=(await Promise.all(importBatches.map((x)=>this.repository.listImportRows(x.batchId)))).flat();
-    const payload = { schemaVersion:1 as const, generatedAt:new Date().toISOString(), entities:{ farmers,plots,activities,reviews,lots,stockMovements,storageLocations,importBatches,importRows,importMappingTemplates,auditEvents,outbox } };
+    const payload = { schemaVersion:1 as const, generatedAt:new Date().toISOString(), entities:{ farmers,plots,activities,reviews,lots,stockMovements,allocationEvents,lotStandardDefinitions,lotStandardHistory,storageLocations,importBatches,importRows,importMappingTemplates,auditEvents,outbox } };
     return { ...payload, checksum:checksum(payload) };
   }
 
@@ -50,12 +53,17 @@ export class BackupService {
     const existingReviews = new Set((await this.repository.listAllReviews()).map((item) => item.reviewId));
     const existingAudits = new Set((await this.repository.listAllAuditEvents()).map((item) => item.auditId));
     const existingMovements = new Set((await this.repository.listStockMovements()).map((item) => item.movementId));
+    const existingAllocationEvents = new Set((await this.repository.listAllocationEvents()).map((item) => item.eventId));
+    const existingStandardHistory = new Set((await this.repository.listLotStandardHistory()).map((item) => item.historyId));
     for (const item of archive.entities.farmers) await this.repository.saveFarmer(item as never);
     for (const item of archive.entities.plots) await this.repository.savePlot(item as never);
     for (const item of archive.entities.activities) await this.repository.saveActivity(item as never);
     for (const item of archive.entities.reviews) if (!existingReviews.has(String(item.reviewId))) await this.repository.saveReview(item as never);
     for (const item of archive.entities.lots) await this.repository.saveLot(item as never);
     for (const item of archive.entities.stockMovements) if (!existingMovements.has(String(item.movementId))) await this.repository.appendStockMovement(item as never);
+    for (const item of archive.entities.allocationEvents) if (!existingAllocationEvents.has(String(item.eventId))) await this.repository.appendAllocationEvent(item as never);
+    for (const item of archive.entities.lotStandardDefinitions) await this.repository.saveLotStandardDefinition(item as never);
+    for (const item of archive.entities.lotStandardHistory) if (!existingStandardHistory.has(String(item.historyId))) await this.repository.appendLotStandardHistory(item as never);
     for (const item of archive.entities.storageLocations) await this.repository.saveStorageLocation(item as never);
     for (const item of archive.entities.importBatches) await this.repository.saveImportBatch(item as never);
     for (const item of archive.entities.importRows) await this.repository.saveImportRow(item as never);

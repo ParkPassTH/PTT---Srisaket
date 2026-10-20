@@ -1,4 +1,4 @@
-import type { Activity, AuditEvent, Farmer, ImportBatch, ImportMappingTemplate, ImportRow, Lot, OutboxMessage, Plot, Review, StockMovement, StorageLocation } from "../domain/types.js";
+import type { Activity, AllocationEvent, AuditEvent, Farmer, ImportBatch, ImportMappingTemplate, ImportRow, Lot, LotStandardDefinition, LotStandardHistory, OutboxMessage, Plot, Review, StockMovement, StorageLocation } from "../domain/types.js";
 import type { ActivityFilters, Repository } from "./repository.js";
 
 /** Empty, process-local repository for tests and local development only. */
@@ -15,6 +15,9 @@ export class MemoryRepository implements Repository {
   private importRows = new Map<string, ImportRow>();
   private importMappingTemplates = new Map<string, ImportMappingTemplate>();
   private stockMovements: StockMovement[] = [];
+  private allocationEvents: AllocationEvent[] = [];
+  private lotStandardDefinitions = new Map<string,LotStandardDefinition>();
+  private lotStandardHistory:LotStandardHistory[]=[];
 
   async getDashboardSummary() {
     const activities = [...this.activities.values()];
@@ -55,6 +58,18 @@ export class MemoryRepository implements Repository {
     if (this.stockMovements.some((value) => value.lotId === item.lotId && value.reference === item.reference)) throw new Error(`Duplicate stock reference: ${item.reference}`);
     this.stockMovements.push(structuredClone(item));
   }
+  async listAllocationEvents(lotId?:string){ return this.allocationEvents.filter((item)=>!lotId||item.lotId===lotId).sort((a,b)=>a.occurredAt.localeCompare(b.occurredAt)||a.eventId.localeCompare(b.eventId)).map((item)=>structuredClone(item)); }
+  async getAllocationEventByReference(reference:string){ const item=this.allocationEvents.find((value)=>value.reference===reference); return item?structuredClone(item):undefined; }
+  async appendAllocationEvent(item:AllocationEvent){
+    if(this.allocationEvents.some((value)=>value.eventId===item.eventId)) throw new Error(`Duplicate allocation event: ${item.eventId}`);
+    if(this.allocationEvents.some((value)=>value.reference===item.reference)) throw new Error(`Duplicate allocation reference: ${item.reference}`);
+    this.allocationEvents.push(structuredClone(item));
+  }
+  async listLotStandardDefinitions(){ return [...this.lotStandardDefinitions.values()].sort((a,b)=>a.code.localeCompare(b.code)).map((x)=>structuredClone(x)); }
+  async getLotStandardDefinition(id:string){ const x=this.lotStandardDefinitions.get(id); return x?structuredClone(x):undefined; }
+  async saveLotStandardDefinition(x:LotStandardDefinition){ this.lotStandardDefinitions.set(x.definitionId,structuredClone(x)); }
+  async listLotStandardHistory(lotId?:string){ return this.lotStandardHistory.filter((x)=>!lotId||x.lotId===lotId).sort((a,b)=>a.effectiveAt.localeCompare(b.effectiveAt)||a.recordedAt.localeCompare(b.recordedAt)).map((x)=>structuredClone(x)); }
+  async appendLotStandardHistory(x:LotStandardHistory){ if(this.lotStandardHistory.some((item)=>item.historyId===x.historyId)) throw new Error(`Duplicate standard history: ${x.historyId}`); this.lotStandardHistory.push(structuredClone(x)); }
   async listStorageLocations() { return [...this.storageLocations.values()].sort((a,b) => a.name.localeCompare(b.name,"th")).map((item) => structuredClone(item)); }
   async getStorageLocation(id: string) { const item=this.storageLocations.get(id); return item ? structuredClone(item) : undefined; }
   async saveStorageLocation(item: StorageLocation) { this.storageLocations.set(item.locationId, structuredClone(item)); }

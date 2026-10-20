@@ -1,6 +1,6 @@
 import { google, sheets_v4 } from "googleapis";
 import type { AppConfig } from "../config.js";
-import type { Activity, AuditEvent, Farmer, ImportBatch, ImportMappingTemplate, ImportRow, Lot, OutboxMessage, Plot, Review, StockMovement, StorageLocation } from "../domain/types.js";
+import type { Activity, AllocationEvent, AuditEvent, Farmer, ImportBatch, ImportMappingTemplate, ImportRow, Lot, LotStandardDefinition, LotStandardHistory, OutboxMessage, Plot, Review, StockMovement, StorageLocation } from "../domain/types.js";
 import type { ActivityFilters, Repository } from "./repository.js";
 
 const TABLES = {
@@ -10,6 +10,9 @@ const TABLES = {
   Reviews: ["review_id", "activity_id", "reviewer_id", "decision", "reason", "reviewed_at"],
   Lots: ["lot_id", "activity_id", "farmer_id", "farmer_name", "plot_name", "crop", "quantity", "unit", "harvest_date", "inventory_status", "trace_token", "storage_location_id", "storage_location_name", "created_at", "updated_at"],
   StockMovements: ["movement_id", "lot_id", "movement_type", "quantity", "unit", "actor_id", "reason", "reference", "occurred_at"],
+  AllocationEvents: ["event_id","allocation_id","lot_id","event_type","quantity","unit","responsible_name","recipient_name","order_reference","document_reference","expires_at","reason","reference","actor_id","stock_movement_id","occurred_at"],
+  LotStandardDefinitions: ["definition_id","code","name","description","active","created_by","created_at","updated_by","updated_at"],
+  LotStandardHistory: ["history_id","lot_id","definition_id","status","actor_id","reason","evidence_reference","effective_at","recorded_at"],
   StorageLocations: ["location_id", "name", "location_type", "address", "zone", "status", "created_at", "updated_at"],
   ImportBatches: ["batch_id","source_name","source_type","entity_type","checksum","status","total_rows","valid_rows","error_rows","duplicate_rows","created_by","created_at","updated_at"],
   ImportRows: ["import_row_id","batch_id","source_row_number","raw_data","normalized_data","row_status","issues","target_entity_id","imported_by","imported_at","verification_status","reviewer_id","reviewed_at","review_reason","created_at","updated_at"],
@@ -119,6 +122,17 @@ export class GoogleSheetsRepository implements Repository {
     if (await this.getStockMovementByReference(x.lotId,x.reference)) throw new Error(`Duplicate stock reference: ${x.reference}`);
     await this.append("StockMovements",mapKeys(x));
   }
+  async listAllocationEvents(lotId?:string){ return (await this.rows("AllocationEvents")).map(allocationEventFromRow).filter((x)=>!lotId||x.lotId===lotId).sort((a,b)=>a.occurredAt.localeCompare(b.occurredAt)||a.eventId.localeCompare(b.eventId)); }
+  async getAllocationEventByReference(reference:string){ return (await this.listAllocationEvents()).find((x)=>x.reference===reference); }
+  async appendAllocationEvent(x:AllocationEvent){
+    if(await this.getAllocationEventByReference(x.reference)) throw new Error(`Duplicate allocation reference: ${x.reference}`);
+    await this.append("AllocationEvents",mapKeys(x));
+  }
+  async listLotStandardDefinitions(){ return (await this.rows("LotStandardDefinitions")).map(lotStandardDefinitionFromRow).sort((a,b)=>a.code.localeCompare(b.code)); }
+  async getLotStandardDefinition(id:string){ return (await this.listLotStandardDefinitions()).find((x)=>x.definitionId===id); }
+  async saveLotStandardDefinition(x:LotStandardDefinition){ await this.upsert("LotStandardDefinitions","definition_id",x.definitionId,mapKeys(x)); }
+  async listLotStandardHistory(lotId?:string){ return (await this.rows("LotStandardHistory")).map(lotStandardHistoryFromRow).filter((x)=>!lotId||x.lotId===lotId).sort((a,b)=>a.effectiveAt.localeCompare(b.effectiveAt)||a.recordedAt.localeCompare(b.recordedAt)); }
+  async appendLotStandardHistory(x:LotStandardHistory){ await this.append("LotStandardHistory",mapKeys(x)); }
   async listStorageLocations() { return (await this.rows("StorageLocations")).map(storageLocationFromRow).sort((a,b) => a.name.localeCompare(b.name,"th")); }
   async getStorageLocation(id: string) { return (await this.listStorageLocations()).find((x) => x.locationId === id); }
   async saveStorageLocation(x: StorageLocation) { await this.upsert("StorageLocations", "location_id", x.locationId, mapKeys(x)); }
@@ -161,10 +175,13 @@ function activityToRow(x: Activity) { return mapKeys(x); }
 function reviewFromRow(r: Row): Review { return { reviewId:r.review_id!,activityId:r.activity_id!,reviewerId:r.reviewer_id!,decision:r.decision as Review["decision"],reason:r.reason!,reviewedAt:r.reviewed_at! }; }
 function lotFromRow(r: Row): Lot { return { lotId:r.lot_id!,activityId:r.activity_id!,farmerId:r.farmer_id!,farmerName:r.farmer_name!,plotName:r.plot_name!,crop:r.crop!,quantity:Number(r.quantity),unit:r.unit!,harvestDate:r.harvest_date!,inventoryStatus:r.inventory_status as Lot["inventoryStatus"],traceToken:r.trace_token!,...(r.storage_location_id?{storageLocationId:r.storage_location_id}:{}),...(r.storage_location_name?{storageLocationName:r.storage_location_name}:{}),createdAt:r.created_at!,updatedAt:r.updated_at! }; }
 function stockMovementFromRow(r:Row):StockMovement{return{movementId:r.movement_id!,lotId:r.lot_id!,movementType:r.movement_type as StockMovement["movementType"],quantity:Number(r.quantity),unit:r.unit!,actorId:r.actor_id!,reason:r.reason!,reference:r.reference!,occurredAt:r.occurred_at!};}
+function allocationEventFromRow(r:Row):AllocationEvent{return{eventId:r.event_id!,allocationId:r.allocation_id!,lotId:r.lot_id!,eventType:r.event_type as AllocationEvent["eventType"],quantity:Number(r.quantity),unit:r.unit!,responsibleName:r.responsible_name!,recipientName:r.recipient_name!,orderReference:r.order_reference!,...(r.document_reference?{documentReference:r.document_reference}:{}),expiresAt:r.expires_at!,reason:r.reason!,reference:r.reference!,actorId:r.actor_id!,stockMovementId:r.stock_movement_id!,occurredAt:r.occurred_at!};}
+function lotStandardDefinitionFromRow(r:Row):LotStandardDefinition{return{definitionId:r.definition_id!,code:r.code as LotStandardDefinition["code"],name:r.name!,description:r.description!,active:r.active!=="false"&&r.active!=="FALSE",createdBy:r.created_by!,createdAt:r.created_at!,updatedBy:r.updated_by!,updatedAt:r.updated_at!};}
+function lotStandardHistoryFromRow(r:Row):LotStandardHistory{return{historyId:r.history_id!,lotId:r.lot_id!,definitionId:r.definition_id!,status:r.status as LotStandardHistory["status"],actorId:r.actor_id!,reason:r.reason!,evidenceReference:r.evidence_reference!,effectiveAt:r.effective_at!,recordedAt:r.recorded_at!};}
 function storageLocationFromRow(r: Row): StorageLocation { return { locationId:r.location_id!,name:r.name!,...(r.location_type?{locationType:r.location_type}:{}),...(r.address?{address:r.address}:{}),...(r.zone?{zone:r.zone}:{}),status:r.status === "INACTIVE" ? "INACTIVE" : "ACTIVE",createdAt:r.created_at!,updatedAt:r.updated_at! }; }
 function importBatchFromRow(r:Row):ImportBatch{return{batchId:r.batch_id!,sourceName:r.source_name!,sourceType:r.source_type as ImportBatch["sourceType"],entityType:r.entity_type as ImportBatch["entityType"],checksum:r.checksum!,status:r.status as ImportBatch["status"],totalRows:Number(r.total_rows),validRows:Number(r.valid_rows),errorRows:Number(r.error_rows),duplicateRows:Number(r.duplicate_rows),createdBy:r.created_by!,createdAt:r.created_at!,updatedAt:r.updated_at!};}
 function importRowFromRow(r:Row):ImportRow{return{importRowId:r.import_row_id!,batchId:r.batch_id!,sourceRowNumber:Number(r.source_row_number),rawData:json(r.raw_data!,{}),normalizedData:json(r.normalized_data!,{}),rowStatus:r.row_status as ImportRow["rowStatus"],issues:json(r.issues!,[]),...(r.target_entity_id?{targetEntityId:r.target_entity_id}:{}),...(r.imported_by?{importedBy:r.imported_by}:{}),...(r.imported_at?{importedAt:r.imported_at}:{}),verificationStatus:isVerificationStatus(r.verification_status)?r.verification_status:"NOT_REQUIRED",...(r.reviewer_id?{reviewerId:r.reviewer_id}:{}),...(r.reviewed_at?{reviewedAt:r.reviewed_at}:{}),...(r.review_reason?{reviewReason:r.review_reason}:{}),createdAt:r.created_at!,updatedAt:r.updated_at!};}
 function isVerificationStatus(value:string|undefined):value is ImportRow["verificationStatus"]{return value !== undefined && ["NOT_REQUIRED","PENDING","VERIFIED","REJECTED"].includes(value);}
-function importMappingTemplateFromRow(r:Row):ImportMappingTemplate{return{templateId:r.template_id!,name:r.name!,sourceName:r.source_name!,entityType:"FARMER",headers:json(r.headers!,[]),mapping:json(r.mapping!,{}),createdBy:r.created_by!,updatedBy:r.updated_by!,createdAt:r.created_at!,updatedAt:r.updated_at!};}
+function importMappingTemplateFromRow(r:Row):ImportMappingTemplate{return{templateId:r.template_id!,name:r.name!,sourceName:r.source_name!,entityType:r.entity_type==="PLOT"?"PLOT":"FARMER",headers:json(r.headers!,[]),mapping:json(r.mapping!,{}),createdBy:r.created_by!,updatedBy:r.updated_by!,createdAt:r.created_at!,updatedAt:r.updated_at!};}
 function auditFromRow(r: Row): AuditEvent { return { auditId:r.audit_id!,entityType:r.entity_type as AuditEvent["entityType"],entityId:r.entity_id!,actorId:r.actor_id!,action:r.action!,...(r.reason?{reason:r.reason}:{}),...(r.before?{before:json(r.before,null)}:{}),...(r.after?{after:json(r.after,null)}:{}),occurredAt:r.occurred_at! }; }
 function outboxFromRow(r: Row): OutboxMessage { return { messageId:r.message_id!, channel:"LINE", recipient:r.recipient!, body:r.body!, ...(r.line_message?{lineMessage:json<Record<string,unknown>>(r.line_message,{})}:{}), ...(r.related_entity_id?{relatedEntityId:r.related_entity_id}:{}), status:r.status as OutboxMessage["status"], attempts:Number(r.attempts||0), maxAttempts:Number(r.max_attempts||5), nextAttemptAt:r.next_attempt_at!, ...(r.last_error?{lastError:r.last_error}:{}), createdAt:r.created_at!, updatedAt:r.updated_at! }; }

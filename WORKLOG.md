@@ -351,3 +351,15 @@
 - เพิ่ม ImportMappingTemplates บน Memory/Google Sheets พร้อม validation, API list/create/update, audit และ backup/restore ที่ยังอ่าน backup schema เดิมได้
 - ตรวจ desktop/dialog/mobile 390px ตาม Impeccable ไม่มี overflow และจำลอง double-click การจองแล้วเกิด POST เพียงครั้งเดียว
 - ตรวจรวม `npm run check` ผ่าน typecheck, automated tests 51/51 และ production build; dependency audit 0 vulnerabilities
+
+## 2026-10-20 — Migration, controlled standards, allocation and evidence sprint
+
+- ขยาย Import Preview/Commit เป็น FARMER และ PLOT โดยตรวจเจ้าของแปลง รหัส/ชื่อซ้ำ และตรวจ conflict ซ้ำก่อน commit
+- เพิ่ม Mapping Template UI และ Import Review Queue สำหรับยืนยันหรือส่งกลับรายแถวพร้อม provenance, เหตุผล และ audit snapshot
+- เพิ่ม controlled lot-standard definitions/history พร้อมหลักฐาน วันมีผล และกติกากัน `ON_HOLD`/`REJECTED` รวมถึง VOID/RECALLED ออกจากยอดพร้อมใช้
+- เพิ่ม Allocation lifecycle แบบ append-only: จอง ปลดจอง ส่งสินค้า และหมดอายุอัตโนมัติ พร้อมผู้รับผิดชอบ ผู้รับสินค้า เลขอ้างอิง และเอกสาร
+- เพิ่ม worker endpoint ที่ใช้ Bearer `CRON_SECRET` สำหรับประมวลผล LINE outbox และปลดจองหมดอายุบนบริการ cron ฟรี
+- เพิ่ม Impact Dashboard จากจำนวน/เวลาที่วัดจริงและแสดงตรงไปตรงมาว่ายังไม่มี baseline จึงไม่สร้างเปอร์เซ็นต์ผลสำเร็จสมมติ
+- จัดทำ Process Map, Test Report, Pilot Plan, Incident Runbook และ Deployment Verification checklist สำหรับหลักฐาน PoC และการทดลองจริง
+- ตรวจรวม `npm run check` ผ่าน typecheck, automated tests 64/64 และ production build; dependency audit 0 vulnerabilities และ `git diff --check` ผ่าน
+- ตรวจ UI desktop/mobile ตาม Impeccable; viewport 390px ไม่มี horizontal overflow และแก้ fallback วันที่ผิดรูปแบบใน Impact Dashboard

@@ -83,6 +83,18 @@ describe("ImportService", () => {
     await assert.rejects(() => service.reviewRow(preview.batch.batchId, "IMR-MISSING", "VERIFIED", "reviewer", "ไม่พบแถวข้อมูล"), (error:unknown)=>error instanceof HttpError && error.code === "IMPORT_ROW_NOT_FOUND");
   });
 
+  it("previews and commits plots only for existing farmers", async()=>{
+    const repository=new MemoryRepository();
+    await repository.saveFarmer({farmerId:"F-001",memberCode:"M-001",displayName:"เกษตรกรหนึ่ง",status:"ACTIVE"});
+    const service=new ImportService(repository);
+    const preview=await service.preview({sourceName:"plots.csv",entityType:"PLOT",rows:[{member_code:"M-001",plot_name:"แปลงเหนือ",crop:"ข้าว",area_rai:"4.5"}]},"admin");
+    assert.equal(preview.batch.entityType,"PLOT");assert.equal(preview.batch.status,"READY");assert.equal((await repository.listPlots()).length,0);
+    const committed=await service.commit(preview.batch.batchId,"admin","ตรวจทะเบียนเกษตรกรแล้ว");
+    assert.equal(committed.rows[0]?.verificationStatus,"PENDING");assert.equal((await repository.listPlots())[0]?.farmerId,"F-001");assert.equal((await repository.listPlots())[0]?.areaRai,4.5);
+    const invalid=await service.preview({sourceName:"bad-plots.csv",entityType:"PLOT",rows:[{member_code:"M-X",plot_name:"แปลงไม่ทราบเจ้าของ",crop:"ข้าว"}]},"admin");
+    assert.equal(invalid.batch.status,"PREVIEW");assert.equal(invalid.rows[0]?.issues[0]?.code,"FARMER_NOT_FOUND");assert.equal((await repository.listPlots()).length,1);
+  });
+
   it("voids only uncommitted batches", async () => {
     const repository = new MemoryRepository();
     const service = new ImportService(repository);
